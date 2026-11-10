@@ -97,11 +97,16 @@
   #dateLabel{font-size:var(--fs-l);font-weight:700;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #dateLabel::after{content:" ▾";font-size:.6em;color:var(--gold);vertical-align:.15em}
   #dateSub{font-size:var(--fs-s);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #datePick{position:absolute;left:50px;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+  #datePick{position:absolute;left:110px;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
   .ibtn{width:36px;height:36px;border-radius:11px;border:1px solid var(--line);background:var(--panel2);flex:none;
         display:grid;place-items:center;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;padding:0}
   .ibtn:active{background:#1d2f57}
   .ibtn svg{width:15px;height:15px}
+  .spd{height:42px;min-width:54px;padding:0 10px;border-radius:21px;border:2px solid var(--gold);background:var(--gold-d);
+       color:var(--gold);font-family:var(--ui);font-weight:700;font-size:clamp(16px,2.4vh,20px);cursor:pointer;flex:none;
+       font-variant-numeric:tabular-nums}
+  .spd:active{background:#4a3910}
+  .ghost.today{height:28px;padding:2px 10px;flex:none}
   .ghost{border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:11px;flex:none;
          font-family:var(--sc);font-size:var(--fs-s);letter-spacing:.08em;padding:4px 9px;cursor:pointer;height:36px}
 
@@ -184,11 +189,11 @@
     <div class="bar-in">
       <div class="r1">
         <button class="btn" id="play" aria-label="Play through the year"></button>
+        <button class="spd" id="speed" aria-label="Playback speed">2×</button>
         <button class="dateBtn" id="dateBtn" aria-label="Pick a date"><div id="dateLabel">–</div><div id="dateSub"></div></button>
         <input type="date" id="datePick" tabindex="-1" aria-hidden="true">
         <button class="ibtn" id="prevDay" aria-label="Previous day"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="ibtn" id="nextDay" aria-label="Next day"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="ghost" id="todayBtn">Today</button>
       </div>
       <div class="track">
         <canvas id="heat" aria-hidden="true"></canvas>
@@ -197,7 +202,7 @@
       <div class="months" id="months"></div>
       <div class="r4">
         <div class="markers" id="markers"></div>
-        <button class="chip" id="speed">1×</button>
+        <button class="ghost today" id="todayBtn">Today</button>
       </div>
     </div>
   </section>
@@ -435,8 +440,8 @@
 
   let YEAR, N, day, selMin = null, nowMin, playing = false;
   const SPEEDS = [['½×', 28], ['1×', 14], ['2×', 7], ['4×', 3.5]];
-  let speedIdx = store.get('speed');
-  if (!Number.isInteger(speedIdx) || speedIdx < 0 || speedIdx >= SPEEDS.length) speedIdx = 1;
+  let speedIdx = store.get('speed2');
+  if (!Number.isInteger(speedIdx) || speedIdx < 0 || speedIdx >= SPEEDS.length) speedIdx = 2;   // default 2×
   let todayLen = 0;
 
   let embedded = false; try { embedded = window.top !== window.self; } catch { embedded = true; }
@@ -507,7 +512,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, S, S);
     // Size the rings so the 6-hour labels always fit inside the canvas
-    const fontPx = Math.max(10, S * 0.036), gap = Math.max(8, S * 0.03);
+    const fontPx = Math.max(10, S * 0.036), gap = Math.max(8, S * 0.03, Math.max(9, S * 0.036) + 3);  // clear the sunrise/sunset markers
     ctx.font = `600 ${fontPx}px system-ui,sans-serif`;
     const labelW = Math.max(ctx.measureText('6AM').width, ctx.measureText('6PM').width);
     const cx = S / 2, cy = S / 2;
@@ -576,19 +581,6 @@
     if (D.rise !== null) spoke(D.rise);
     if (D.set !== null) spoke(D.set);
 
-    // time hand (dashed when a custom time is picked)
-    const [hx0, hy0] = P(Ri * 0.55, hm), [hx1, hy1] = P(Ro * 0.97, hm);
-    ctx.strokeStyle = '#000a'; ctx.lineWidth = lw * 2;
-    ctx.beginPath(); ctx.moveTo(hx0, hy0); ctx.lineTo(hx1, hy1); ctx.stroke();
-    ctx.strokeStyle = '#e9c46a'; ctx.lineWidth = lw;
-    if (selMin !== null) ctx.setLineDash([lw * 2.5, lw * 1.6]);
-    ctx.beginPath(); ctx.moveTo(hx0, hy0); ctx.lineTo(hx1, hy1); ctx.stroke();
-    ctx.setLineDash([]);
-
-    const [mx, my] = P((Rm + Ro) / 2, hm), mr = Math.max(8, S * 0.03);
-    ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2);
-    ctx.fillStyle = '#e9c46a'; ctx.fill(); ctx.lineWidth = Math.max(3, S * 0.011); ctx.strokeStyle = '#fff'; ctx.stroke();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(mx, my, mr + ctx.lineWidth + 2, 0, Math.PI * 2); ctx.stroke();
 
     if (D.rise !== null) marker(D.rise, true);
     if (D.set !== null) marker(D.set, false);
@@ -891,8 +883,12 @@
   });
 
   $('play').onclick = () => setPlaying(!playing);
-  const setSpeedLbl = () => { $('speed').textContent = SPEEDS[speedIdx][0]; $('speed').title = `Playback speed: a year in ${SPEEDS[speedIdx][1]} s`; };
-  $('speed').onclick = () => { speedIdx = (speedIdx + 1) % SPEEDS.length; store.set('speed', speedIdx); setSpeedLbl(); };
+  const setSpeedLbl = () => {
+    $('speed').textContent = SPEEDS[speedIdx][0];
+    $('speed').title = `Playback speed: a year in ${SPEEDS[speedIdx][1]} s. Tap to change.`;
+    $('speed').setAttribute('aria-label', `Playback speed ${SPEEDS[speedIdx][0]}, tap to change`);
+  };
+  $('speed').onclick = () => { speedIdx = (speedIdx + 1) % SPEEDS.length; store.set('speed2', speedIdx); setSpeedLbl(); };
 
   function goNow() {
     if (selMin === null) return;
