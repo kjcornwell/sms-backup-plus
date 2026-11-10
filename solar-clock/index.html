@@ -506,10 +506,29 @@
   function drawClock(D) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, S, S);
-    const cx = S / 2, cy = S / 2, Ro = S * 0.445, Rm = S * 0.3, Ri = S * 0.152;
+    // Size the rings so the 6-hour labels always fit inside the canvas
+    const fontPx = Math.max(10, S * 0.036), gap = Math.max(8, S * 0.03);
+    ctx.font = `600 ${fontPx}px system-ui,sans-serif`;
+    const labelW = Math.max(ctx.measureText('6AM').width, ctx.measureText('6PM').width);
+    const cx = S / 2, cy = S / 2;
+    const Ro = Math.min(S * 0.42, S / 2 - 2 - gap - labelW);
+    const Rm = Ro * 0.674, Ri = Ro * 0.342;
     const P = (r, m) => [cx + Math.cos(ang(m)) * r, cy + Math.sin(ang(m)) * r];
     const hm = hand();
     ctx.lineCap = 'round';
+
+    // 6-hour markers: 12AM, 6AM, 12PM, 6PM
+    for (const [h, txt] of [[0, '12AM'], [6, '6AM'], [12, '12PM'], [18, '6PM']]) {
+      const m = h * 60, a = ang(m);
+      const [x0, y0] = P(Ro + 2, m), [x1, y1] = P(Ro + gap - 3, m);
+      ctx.strokeStyle = 'rgba(243,234,215,.75)'; ctx.lineWidth = Math.max(1.5, S * 0.006);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      const w = ctx.measureText(txt).width;
+      const r = Ro + gap + Math.abs(Math.cos(a)) * w / 2 + Math.abs(Math.sin(a)) * fontPx * 0.55;
+      const [lx, ly] = P(r, m);
+      ctx.fillStyle = '#d9dbe4'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, lx, ly);
+    }
 
     const ring = (s, e, r0, r1, c) => {
       ctx.beginPath();
