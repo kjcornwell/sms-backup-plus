@@ -132,7 +132,7 @@
   .chip.on{border-color:var(--gold);color:var(--gold)}
   :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
-  dialog{width:min(480px,calc(100vw - 32px));max-height:min(640px,calc(100vh - 48px));border:1px solid var(--line);border-radius:20px;
+  dialog{margin:max(12px,env(safe-area-inset-top,0px)) auto auto;width:min(480px,calc(100vw - 32px));max-height:min(640px,calc(100vh - 24px));border:1px solid var(--line);border-radius:20px;
          background:var(--panel);color:var(--text);padding:16px}
   dialog::backdrop{background:#000a}
   .dhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -142,8 +142,11 @@
   .search:focus{border-color:var(--gold)}
   .gps{width:100%;margin:10px 0;border:1px solid var(--gold);background:var(--gold-d);color:var(--gold);border-radius:12px;
        padding:9px;cursor:pointer;font-family:var(--sc);letter-spacing:.08em;font-size:16px}
-  .results{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
-  .results li{padding:9px 10px;border-radius:10px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:18px}
+  .results{list-style:none;margin:0;padding:0;max-height:min(320px,40vh);overflow:auto}
+  .results li{padding:8px 10px;border-radius:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .results li>div{min-width:0}
+  .results .rn{display:block;font-size:19px;font-weight:600;line-height:1.15}
+  .results .rs{display:block;font-family:var(--ui);font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .results li:hover,.results li:focus{background:#ffffff0d;outline:none}
   .results small{color:var(--muted);font-family:var(--ui);font-size:12px;white-space:nowrap;align-self:center}
   .status{font-family:var(--ui);font-size:12px;color:var(--muted);min-height:16px;margin-top:6px}
@@ -218,7 +221,7 @@
 
 <dialog id="locDlg">
   <div class="dhead"><h2>Location</h2><button class="ibtn" id="dlgClose" aria-label="Close">✕</button></div>
-  <input class="search" id="q" placeholder="Search a city…" autocomplete="off" enterkeyhint="search">
+  <input class="search" id="q" placeholder="Search any city — e.g. Paris, or Springfield, IL" autocomplete="off" enterkeyhint="search">
   <button class="gps" id="gpsBtn">Use my current location</button>
   <ul class="results" id="results"></ul>
   <div class="status" id="dlgStatus"></div>
@@ -1017,14 +1020,94 @@
   });
 
   // ---------- location dialog ----------
+  // City search runs on the device against cities.tsv (GeoNames: every place with 1,000+ people,
+  // each with its IANA time zone). The file is fetched the first time the picker opens.
   const dlg = $('locDlg'), results = $('results'), status = $('dlgStatus');
+  const REGION = {
+    US: { AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',DC:'District of Columbia',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming' },
+    CA: { '01':'Alberta','02':'British Columbia','03':'Manitoba','04':'New Brunswick','05':'Newfoundland and Labrador','07':'Nova Scotia','08':'Ontario','09':'Prince Edward Island','10':'Quebec','11':'Saskatchewan','12':'Yukon','13':'Northwest Territories','14':'Nunavut' },
+    AU: { '01':'Australian Capital Territory','02':'New South Wales','03':'Northern Territory','04':'Queensland','05':'South Australia','06':'Tasmania','07':'Victoria','08':'Western Australia' },
+    GB: { ENG:'England', SCT:'Scotland', WLS:'Wales', NIR:'Northern Ireland' },
+  };
+  let countryNames = null;
+  try { countryNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch {}
+  const countryName = cc => { try { return (countryNames && countryNames.of(cc)) || cc; } catch { return cc; } };
+  const norm = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+  let DB = null, dbLoading = null;
+  function loadCities() {
+    if (DB) return Promise.resolve(DB);
+    if (dbLoading) return dbLoading;
+    dbLoading = fetch('cities.tsv').then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }).then(txt => {
+      const lines = txt.split('\n'), zones = lines[0].split('|');
+      const n = lines.length - 1, db = { n: 0, name: [], key: [], cc: [], adm: [], lat: new Float32Array(n), lon: new Float32Array(n), pop: new Uint32Array(n), tz: [] };
+      for (let i = 1; i < lines.length; i++) {
+        const f = lines[i].split('\t'); if (f.length < 7) continue;
+        const k = db.n++;
+        db.name.push(f[0]); db.key.push(' ' + norm(f[0])); db.cc.push(f[1]); db.adm.push(f[2]);
+        db.lat[k] = +f[3]; db.lon[k] = +f[4]; db.pop[k] = parseInt(f[5], 36); db.tz.push(zones[parseInt(f[6], 36)]);
+      }
+      DB = db; return db;
+    }).catch(err => { dbLoading = null; throw err; });
+    return dbLoading;
+  }
+  const regionOf = i => (REGION[DB.cc[i]] || {})[DB.adm[i]] || '';
+  function cityRecord(i) {
+    const region = regionOf(i), country = countryName(DB.cc[i]);
+    const label = DB.cc[i] === 'US' ? `${DB.name[i]}, ${region || 'USA'}` : `${DB.name[i]}, ${country}`;
+    return { name: label, sub: [region, country].filter(Boolean).join(', '), pop: DB.pop[i],
+             lat: DB.lat[i], lon: DB.lon[i], tz: DB.tz[i] };
+  }
+  // Does a qualifier ("fl", "florida", "france", "uk") match city i's region or country?
+  function qualifies(i, q) {
+    if (!q) return true;
+    const cc = DB.cc[i].toLowerCase(), adm = DB.adm[i].toLowerCase();
+    if (q === cc || q === adm || (q === 'uk' && cc === 'gb') || (q === 'usa' && cc === 'us')) return true;
+    const region = norm(regionOf(i)), country = norm(countryName(DB.cc[i]));
+    return (region && region.startsWith(q)) || country.startsWith(q);
+  }
+  function searchCities(raw) {
+    const parts = raw.split(',').map(norm).filter(Boolean);
+    if (!parts.length) return [];
+    const tryQuery = (name, qual) => {
+      const exact = [], prefix = [], word = [], key = ' ' + name;
+      for (let i = 0; i < DB.n && exact.length < 40; i++) {          // rows are sorted biggest city first
+        const k = DB.key[i];
+        if (k.length < key.length || !k.includes(key)) continue;
+        if (!qualifies(i, qual)) continue;
+        if (k === key) exact.push(i); else if (k.startsWith(key)) prefix.push(i); else word.push(i);
+      }
+      return exact.concat(prefix, word).slice(0, 40);
+    };
+    let hits = tryQuery(parts[0], parts.slice(1).join(' '));
+    if (!hits.length && parts.length === 1 && parts[0].includes(' ')) {   // "paris france", "springfield il"
+      const w = parts[0].split(' ');
+      for (let cut = w.length - 1; cut > 0 && !hits.length; cut--) hits = tryQuery(w.slice(0, cut).join(' '), w.slice(cut).join(' '));
+    }
+    return hits.map(cityRecord);
+  }
+  // Nearest listed place: gives coordinates and GPS fixes a proper time zone and name
+  function nearestCity(lat, lon) {
+    let best = -1, bd = Infinity;
+    const cl = Math.cos(lat * RAD);
+    for (let i = 0; i < DB.n; i++) {
+      const dy = DB.lat[i] - lat; let dx = DB.lon[i] - lon;
+      if (dx > 180) dx -= 360; else if (dx < -180) dx += 360;
+      const d = dy * dy + (dx * cl) * (dx * cl);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best < 0 ? null : { i: best, km: Math.sqrt(bd) * 111.2 };
+  }
+
+  const fmtPop = p => p >= 1e6 ? `${(p / 1e6).toFixed(1)}M` : p >= 1e3 ? `${Math.round(p / 1e3)}k` : `${p}`;
   function showResults(list) {
     results.innerHTML = '';
     for (const r of list) {
       const li = document.createElement('li'); li.tabIndex = 0;
-      li.innerHTML = '<span></span><small></small>';
-      li.children[0].textContent = r.name;
-      li.children[1].textContent = `${r.lat.toFixed(2)}, ${r.lon.toFixed(2)}`;
+      li.innerHTML = '<div><span class="rn"></span><span class="rs"></span></div><small></small>';
+      li.querySelector('.rn').textContent = r.name.split(',')[0];
+      li.querySelector('.rs').textContent = r.sub || r.name.split(',').slice(1).join(',').trim();
+      li.querySelector('small').textContent = r.pop ? fmtPop(r.pop) : '';
       li.onclick = () => setLocation(r);
       li.onkeydown = e => { if (e.key === 'Enter') setLocation(r); };
       results.appendChild(li);
@@ -1035,6 +1118,7 @@
     $('q').value = ''; status.textContent = ''; showResults(PRESETS);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     setTimeout(() => $('q').focus(), 50);
+    loadCities().catch(() => {});
   }
   const closeLoc = () => { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); };
   function setLocLabel() {
@@ -1049,41 +1133,48 @@
   $('q').addEventListener('input', () => {
     clearTimeout(searchT);
     const q = $('q').value.trim();
-    const local = PRESETS.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
-    showResults(q ? local : PRESETS);
-    if (q.length < 2) { status.textContent = ''; return; }
-    status.textContent = 'Searching…';
+    if (!q) { status.textContent = ''; showResults(PRESETS); return; }
+    const seq = ++searchSeq;
     searchT = setTimeout(async () => {
-      const seq = ++searchSeq;
-      try {
-        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`);
-        const j = await res.json();
-        if (seq !== searchSeq) return;
-        const list = (j.results || []).filter(r => r.timezone && validTz(r.timezone)).map(r => ({
-          name: [r.name, r.admin1 && r.admin1 !== r.name ? r.admin1 : null, r.country_code === 'US' ? null : r.country].filter(Boolean).join(', '),
-          lat: r.latitude, lon: r.longitude, tz: r.timezone }));
-        showResults(list.length ? list : local);
-        status.textContent = list.length ? '' : 'No matches';
-      } catch {
-        if (seq === searchSeq) status.textContent = 'City search isn\'t available here. Pick a listed city or enter coordinates.';
-      }
-    }, 280);
+      if (!DB) status.textContent = 'Loading the city list…';
+      try { await loadCities(); }
+      catch { if (seq === searchSeq) { status.textContent = 'Couldn\'t load the city list. Pick a listed city or enter coordinates.';
+              showResults(PRESETS.filter(p => norm(p.name).includes(norm(q)))); } return; }
+      if (seq !== searchSeq) return;
+      const list = searchCities(q);
+      showResults(list);
+      status.textContent = list.length ? '' : `No places match “${q}”. Try “City, State” or “City, Country”.`;
+    }, DB ? 90 : 0);
   });
   $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && results.firstChild) results.firstChild.click(); });
 
+  // A point → the nearest listed place supplies the time zone (and a name when it's close by)
+  async function locationFromPoint(lat, lon, fallbackName) {
+    try {
+      await loadCities();
+      const nc = nearestCity(lat, lon);
+      if (nc) {
+        const rec = cityRecord(nc.i);
+        return { name: nc.km < 25 ? rec.name : fallbackName, lat, lon, tz: rec.tz };
+      }
+    } catch {}
+    return { name: fallbackName, lat, lon, tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  }
   $('gpsBtn').onclick = () => {
     if (!navigator.geolocation) { status.textContent = 'Location is not available in this browser'; return; }
     status.textContent = 'Locating…';
-    navigator.geolocation.getCurrentPosition(pos => {
-      setLocation({ name: 'My location', lat: pos.coords.latitude, lon: pos.coords.longitude,
-                    tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
-    }, err => { status.textContent = err.code === 1 ? 'Location is blocked here. Pick a city or enter coordinates.' : 'Could not get your location'; },
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      const l = await locationFromPoint(lat, lon, 'My location');
+      if (l.name !== 'My location') l.name += ' (GPS)';
+      setLocation(l);
+    }, err => { status.textContent = err.code === 1 ? 'Location is blocked here. Search for a city or enter coordinates.' : 'Could not get your location'; },
     { timeout: 12000, maximumAge: 600000 });
   };
-  $('mGo').onclick = () => {
+  $('mGo').onclick = async () => {
     const lat = parseFloat($('mLat').value), lon = parseFloat($('mLon').value);
     if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) { status.textContent = 'Enter a latitude between −90 and 90 and a longitude between −180 and 180'; return; }
-    setLocation({ name: `${lat.toFixed(3)}, ${lon.toFixed(3)}`, lat, lon, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    setLocation(await locationFromPoint(lat, lon, `${lat.toFixed(3)}, ${lon.toFixed(3)}`));
   };
 
   function setLocation(l) {
