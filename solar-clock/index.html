@@ -48,7 +48,7 @@
     .stage{display:grid;grid-template-columns:minmax(0,1fr) 460px;grid-template-rows:minmax(0,1fr);gap:32px;align-items:center}
     .dialWrap{height:100%}
     .metrics{gap:10px}
-    .phase{padding:12px 16px}.tile{padding:10px 4px 8px}.tw{padding:10px 12px;row-gap:4px}
+    .tile{padding:10px 4px 8px}.tw{padding:10px 12px;row-gap:4px}
   }
   /* Short screens (landscape phones): let the page scroll, keep the controls stuck to the bottom */
   @media (max-height:540px){
@@ -60,12 +60,6 @@
   }
 
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px}
-  .phase{display:flex;gap:10px;align-items:center;padding:8px 12px}
-  .dot{width:12px;height:12px;border-radius:50%;flex:none;border:1px solid #fff4}
-  .pmain{flex:1;min-width:0}
-  .pname{font-size:var(--fs-l);font-weight:700;line-height:1.05}
-  .pwin{font-size:var(--fs-s);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .psun{font-family:var(--ui);font-size:var(--fs-xs);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
   .tile{padding:6px 2px 5px;text-align:center;min-width:0}
@@ -167,14 +161,6 @@
       <canvas id="clock" role="img" aria-label="24-hour solar clock. Drag around the dial to pick a time of day." title="Drag around the dial to pick a time of day"></canvas>
     </div>
     <div class="metrics">
-      <div class="card phase">
-        <div class="dot" id="phDot"></div>
-        <div class="pmain">
-          <div class="pname" id="phName">–</div>
-          <div class="pwin" id="phWin"></div>
-          <div class="psun" id="sunPos"></div>
-        </div>
-      </div>
       <div class="tiles">
         <div class="card tile"><b id="sRise">–</b><span>Sunrise</span></div>
         <div class="card tile"><b id="sSet">–</b><span>Sunset</span></div>
@@ -512,11 +498,11 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, S, S);
     // Size the rings so the 6-hour labels always fit inside the canvas
-    const fontPx = Math.max(10, S * 0.036), gap = Math.max(8, S * 0.03, Math.max(9, S * 0.036) + 3);  // clear the sunrise/sunset markers
+    const fontPx = Math.max(10, S * 0.036), gap = Math.max(8, S * 0.03, Math.max(9, S * 0.036) + 7);  // clear the sunrise/sunset markers
     ctx.font = `600 ${fontPx}px system-ui,sans-serif`;
     const labelW = Math.max(ctx.measureText('6AM').width, ctx.measureText('6PM').width);
     const cx = S / 2, cy = S / 2;
-    const Ro = Math.min(S * 0.42, S / 2 - 2 - gap - labelW);
+    const Ro = Math.min(S * 0.44, S / 2 - 2 - gap - labelW);
     const Rm = Ro * 0.674, Ri = Ro * 0.342;
     const P = (r, m) => [cx + Math.cos(ang(m)) * r, cy + Math.sin(ang(m)) * r];
     const hm = hand();
@@ -717,10 +703,8 @@
     drawClock(D);
     drawHeat();
     const hm = hand();
-    const ph = phaseAt(D.outer, hm), band = BANDS[ph.b];
-    $('phDot').style.background = band[1];
-    $('phName').textContent = band[0];
-    $('phWin').textContent = ph.whole ? 'All day' : `${fmtT(ph.s)} → ${fmtT(ph.e)} (${fmtD(ph.e - ph.s)})`;
+    const ph = phaseAt(D.outer, hm);
+    cv.setAttribute('aria-label', `24-hour solar clock. ${BANDS[ph.b][0]} at ${fmtT(hm)}. Drag around the dial to pick a time of day.`);
     $('nowT').textContent = fmtT(hm);
     const tag = $('nowTag');
     tag.textContent = selMin === null ? 'Now' : '↺ Now';
@@ -744,8 +728,6 @@
     slider.setAttribute('aria-valuetext', `${dateFmt.format(dt)}, ${YEAR}`);
     document.querySelectorAll('#markers .chip').forEach(c => c.classList.toggle('on', +c.dataset.d === day));
 
-    const p = sunPos(utcAt(YEAR, day, hm), loc.lat, loc.lon), az = azimuth(p);
-    $('sunPos').textContent = `Sun ${Math.abs(p.alt).toFixed(1)}° ${p.alt >= 0 ? 'above' : 'below'} horizon · ${compass(az)} ${az.toFixed(0)}°`;
 
     renderTw(D);
     saveState();
