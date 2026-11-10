@@ -170,7 +170,7 @@
         <canvas id="altIco" aria-hidden="true"></canvas>
         <div><b id="altDeg">–</b><span id="altCap"></span></div>
       </div>
-      <div class="badge right bottom" id="moonD" title="Moon distance as a share of its maximum distance (406,700 km = 100%). The icon shows its apparent size: smaller when farther.">
+      <div class="badge right bottom" id="moonD" title="Earth–Moon closeness: 100% at the Moon's closest possible approach (356,400 km); lower as it moves farther away">
         <div><b id="moonClose">–</b><span id="moonKm"></span></div>
         <canvas id="moonDIco" aria-hidden="true"></canvas>
       </div>
@@ -860,7 +860,7 @@
     drawAltIcon(D.noon.alt);
     const mkm = moonDistanceKm(utcAt(YEAR, day, hm));
     const close = Math.max(0, Math.min(1, (MOON_FAR - mkm) / (MOON_FAR - MOON_NEAR)));   // icon size only
-    $('moonClose').textContent = `${(mkm / MOON_FAR * 100).toFixed(1)}%`;               // share of max distance
+    $('moonClose').textContent = `${(MOON_NEAR / mkm * 100).toFixed(1)}%`;              // 100% at closest approach
     $('moonKm').textContent = `${Math.round(mkm).toLocaleString('en-US')} km`;
     drawMoonCloseIcon(close);
 
