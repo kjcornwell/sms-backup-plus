@@ -43,7 +43,8 @@
   .badge canvas{width:var(--ico);height:var(--ico);flex:none;display:block}
   .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-l);line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .badge span{display:block;font-family:var(--ui);font-size:var(--fs-s);color:var(--muted);white-space:nowrap;margin-top:2px}
-  #moonName,#altCap{white-space:normal;max-width:5.2em;line-height:1.15;margin-left:auto}
+  /* always exactly two lines so the badges never change height */
+  #moonName,#altCap{white-space:pre;line-height:1.15;height:2.3em}
   .metrics{flex:none;display:flex;flex-direction:column;gap:7px;min-width:0}
   @media (min-width:900px) and (min-height:560px){
     :root{--fs-xs:13px;--fs-s:16px;--fs-m:21px;--fs-l:30px}
@@ -852,10 +853,10 @@
     drawSunIcon(rAU);
     const mo = moonInfo(utcAt(YEAR, day, hm));
     $('moonPct').textContent = `${Math.round(mo.k * 100)}%`;
-    $('moonName').textContent = mo.name;
+    $('moonName').textContent = mo.name.replace(' ', '\n');
     drawMoonIcon(mo);
     $('altDeg').textContent = `${D.noon.alt.toFixed(1)}°`;
-    $('altCap').textContent = D.noon.alt >= 0 ? `noon high ${fmtT(D.noon.m)}` : 'below horizon all day';
+    $('altCap').textContent = D.noon.alt >= 0 ? `noon high\n${fmtT(D.noon.m)}` : 'below horizon\nall day';
     drawAltIcon(D.noon.alt);
     const mkm = moonDistanceKm(utcAt(YEAR, day, hm));
     const close = Math.max(0, Math.min(1, (MOON_FAR - mkm) / (MOON_FAR - MOON_NEAR)));   // icon size only
