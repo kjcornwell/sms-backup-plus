@@ -45,6 +45,7 @@
   .badge{position:absolute;top:0;display:flex;align-items:center;gap:8px;pointer-events:none;z-index:1;--ico:clamp(36px,5.6vh,58px)}
   .badge:not(.right){left:0}
   .badge.right{right:0;text-align:right}
+  .badge.bottom{top:auto;bottom:0}
   .badge canvas{width:var(--ico);height:var(--ico);flex:none;display:block}
   .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-l);line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .badge span{display:block;font-family:var(--ui);font-size:var(--fs-s);color:var(--muted);white-space:nowrap;margin-top:2px}
@@ -172,6 +173,10 @@
       <div class="badge right" id="moonB" title="Moon phase and illumination">
         <div><b id="moonPct">–</b><span id="moonName"></span></div>
         <canvas id="moonIco" aria-hidden="true"></canvas>
+      </div>
+      <div class="badge right bottom" id="moonD" title="How close the Moon is: 0% at its farthest (406,700 km), 100% at its closest (356,400 km)">
+        <div><b id="moonClose">–</b><span id="moonKm"></span></div>
+        <canvas id="moonDIco" aria-hidden="true"></canvas>
       </div>
       <canvas id="clock" role="img" aria-label="24-hour solar clock. Drag around the dial to pick a time of day." title="Drag around the dial to pick a time of day"></canvas>
     </div>
@@ -328,6 +333,19 @@
     if (near(0)) idx = 0; else if (near(90)) idx = 2; else if (near(180)) idx = 4; else if (near(270)) idx = 6;
     else idx = e < 90 ? 1 : e < 180 ? 3 : e < 270 ? 5 : 7;
     return { e, k, name: MOON_NAMES[idx] };
+  }
+
+  const MOON_NEAR = 356400, MOON_FAR = 406700;   // km: extreme perigee / apogee
+  function moonDistanceKm(ms) {
+    const d = ms / 864e5 + 2440587.5 - 2451545.0;
+    const Mm = (134.963 + 13.064993 * d) * RAD, D = (297.850 + 12.190749 * d) * RAD,
+          Ms = (357.529 + 0.98560028 * d) * RAD, F = (93.272 + 13.229350 * d) * RAD;
+    const c = Math.cos;
+    return 385000.56 - 20905.355 * c(Mm) - 3699.111 * c(2 * D - Mm) - 2955.968 * c(2 * D) - 569.925 * c(2 * Mm)
+         + 48.888 * c(Ms) - 3.149 * c(2 * F) + 246.158 * c(2 * D - 2 * Mm) - 152.138 * c(2 * D - Ms - Mm)
+         - 170.733 * c(2 * D + Mm) - 204.586 * c(2 * D - Ms) - 129.620 * c(Ms - Mm) + 108.743 * c(D)
+         + 104.755 * c(Ms + Mm) + 10.321 * c(2 * D - 2 * F) + 79.661 * c(Mm - 2 * F) - 34.782 * c(4 * D - Mm)
+         - 23.210 * c(3 * Mm) - 21.636 * c(4 * D - 2 * Mm) + 24.208 * c(2 * D + Ms - Mm) + 30.824 * c(2 * D + Ms);
   }
 
   // ---------- time zones ----------
@@ -510,7 +528,7 @@
       const dx = S / 2 - (b.offsetWidth - offL), dy = S / 2 - (b.offsetHeight - offT);
       return dx > 0 && dy > 0 ? Math.hypot(dx, dy) - 6 : Math.max(dx, dy) - 6;
     };
-    badgeLimit = Math.min(lim(sb), lim(mb));
+    badgeLimit = Math.min(lim(sb), lim(mb), lim($('moonD')));
     cv.width = Math.round(S * dpr); cv.height = Math.round(S * dpr);
     HW = hc.clientWidth; HH = hc.clientHeight; hc.width = Math.round(HW * dpr); hc.height = Math.round(HH * dpr);
     render();
@@ -669,6 +687,18 @@
     c.restore();
   }
 
+  // Moon-closeness icon: a plain disc that grows as the Moon gets closer
+  const moonDIco = $('moonDIco');
+  function drawMoonCloseIcon(t) {
+    const c = icoCtx(moonDIco), r = (6 + 6.5 * t) * c.unit;
+    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = '#d9d4c4'; c.shadowColor = '#efe8d2'; c.shadowBlur = 6 * c.unit; c.fill();
+    c.shadowBlur = 0; c.fillStyle = '#00000014';
+    for (const [x, y, rr] of [[-0.3, -0.2, 0.22], [0.25, 0.25, 0.16], [0.15, -0.35, 0.1]]) {
+      c.beginPath(); c.arc(x * r, y * r, rr * r, 0, Math.PI * 2); c.fill();
+    }
+  }
+
   const xOf = d => INSET + d / (N - 1) * (HW - 2 * INSET);
   function drawHeat() {
     if (!HW || !heatImg) return;
@@ -813,6 +843,11 @@
     $('moonPct').textContent = `${Math.round(mo.k * 100)}%`;
     $('moonName').textContent = mo.name;
     drawMoonIcon(mo);
+    const mkm = moonDistanceKm(utcAt(YEAR, day, hm));
+    const close = Math.max(0, Math.min(1, (MOON_FAR - mkm) / (MOON_FAR - MOON_NEAR)));
+    $('moonClose').textContent = `${Math.round(close * 100)}%`;
+    $('moonKm').textContent = `${Math.round(mkm).toLocaleString('en-US')} km`;
+    drawMoonCloseIcon(close);
 
     renderTw(D);
     saveState();
