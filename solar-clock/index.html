@@ -163,9 +163,9 @@
 
   <main class="stage">
     <div class="dialWrap" id="dialWrap">
-      <div class="badge" id="sunB" title="Share of the day that is daylight">
+      <div class="badge" id="sunB" title="Sun's apparent size compared with its yearly average; it grows as Earth gets closer">
         <canvas id="sunIco" aria-hidden="true"></canvas>
-        <div><b id="dayPct">–</b><span>daylight</span></div>
+        <div><b id="sunPct">–</b><span id="sunCap"></span></div>
       </div>
       <div class="badge right" id="moonB" title="Moon phase and illumination">
         <div><b id="moonPct">–</b><span id="moonName"></span></div>
@@ -295,6 +295,16 @@
     return { alt: Math.asin(Math.max(-1, Math.min(1, sinAlt))) * DEG, ha, dec, la };
   }
   const sunAlt = (ms, lat, lon) => sunPos(ms, lat, lon).alt;
+  // Earth–Sun distance in AU (NOAA radius vector). Apparent size ∝ 1 / distance.
+  const AU_KM = 149597870.7, R_PERI = 0.98329, R_APH = 1.01671;
+  function sunDistanceAU(ms) {
+    const jc = (ms / 864e5 + 2440587.5 - 2451545) / 36525;
+    const M = (357.52911 + jc * (35999.05029 - 0.0001537 * jc)) * RAD;
+    const e = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+    const C = (Math.sin(M) * (1.914602 - jc * (0.004817 + 0.000014 * jc))
+            + Math.sin(2 * M) * (0.019993 - 0.000101 * jc) + Math.sin(3 * M) * 0.000289) * RAD;
+    return 1.000001018 * (1 - e * e) / (1 + e * Math.cos(M + C));
+  }
   function azimuth(p) {
     const az = Math.atan2(Math.sin(p.ha), Math.cos(p.ha) * Math.sin(p.la) - Math.tan(p.dec) * Math.cos(p.la)) * DEG + 180;
     return (az + 360) % 360;
@@ -636,10 +646,12 @@
     const px = 30; cnv.width = px * dpr; cnv.height = px * dpr;
     const c = cnv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, px / 2 * dpr, px / 2 * dpr); return c;   // translate is in device px
   }
-  function drawSunIcon(frac) {
+  // Icon radius is stretched across the year's range (farthest → closest) so the change is visible;
+  // true to scale it would differ by only ~3.4%.
+  function drawSunIcon(rAU) {
     const c = icoCtx(sunIco);
-    const r = Math.max(1.5, 7.5 * Math.sqrt(Math.max(0, Math.min(1, frac))));   // area ∝ daylight share
-    drawSunGlyph(c, r, true);
+    const t = Math.max(0, Math.min(1, (1 / rAU - 1 / R_APH) / (1 / R_PERI - 1 / R_APH)));
+    drawSunGlyph(c, 4.2 + 3.3 * t, true);
   }
   function drawMoonIcon(m) {
     const c = icoCtx(moonIco), r = 12;
@@ -792,9 +804,10 @@
     document.querySelectorAll('#markers .chip').forEach(c => c.classList.toggle('on', +c.dataset.d === day));
 
 
-    const frac = D.len / 1440;
-    $('dayPct').textContent = `${Math.round(frac * 100)}%`;
-    drawSunIcon(frac);
+    const rAU = sunDistanceAU(utcAt(YEAR, day, 720));
+    $('sunPct').textContent = `${(100 / rAU).toFixed(1)}%`;
+    $('sunCap').textContent = `${(rAU * AU_KM / 1e6).toFixed(1)}M km`;
+    drawSunIcon(rAU);
     const mo = moonInfo(utcAt(YEAR, day, hm));
     $('moonPct').textContent = `${Math.round(mo.k * 100)}%`;
     $('moonName').textContent = mo.name;
