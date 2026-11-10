@@ -49,7 +49,7 @@
   .badge canvas{width:var(--ico);height:var(--ico);flex:none;display:block}
   .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-l);line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .badge span{display:block;font-family:var(--ui);font-size:var(--fs-s);color:var(--muted);white-space:nowrap;margin-top:2px}
-  #moonName{white-space:normal;max-width:5.2em;line-height:1.15;margin-left:auto}
+  #moonName,#altCap{white-space:normal;max-width:5.2em;line-height:1.15;margin-left:auto}
   .metrics{flex:none;display:flex;flex-direction:column;gap:7px;min-width:0}
   @media (min-width:900px) and (min-height:560px){
     :root{--fs-xs:13px;--fs-s:16px;--fs-m:21px;--fs-l:30px}
@@ -173,6 +173,10 @@
       <div class="badge right" id="moonB" title="Moon phase and illumination">
         <div><b id="moonPct">–</b><span id="moonName"></span></div>
         <canvas id="moonIco" aria-hidden="true"></canvas>
+      </div>
+      <div class="badge bottom" id="altB" title="How high the sun climbs at solar noon: 0° is the horizon, 90° is straight overhead">
+        <canvas id="altIco" aria-hidden="true"></canvas>
+        <div><b id="altDeg">–</b><span id="altCap"></span></div>
       </div>
       <div class="badge right bottom" id="moonD" title="How close the Moon is: 0% at its farthest (406,700 km), 100% at its closest (356,400 km)">
         <div><b id="moonClose">–</b><span id="moonKm"></span></div>
@@ -528,7 +532,7 @@
       const dx = S / 2 - (b.offsetWidth - offL), dy = S / 2 - (b.offsetHeight - offT);
       return dx > 0 && dy > 0 ? Math.hypot(dx, dy) - 6 : Math.max(dx, dy) - 6;
     };
-    badgeLimit = Math.min(lim(sb), lim(mb), lim($('moonD')));
+    badgeLimit = Math.min(lim(sb), lim(mb), lim($('moonD')), lim($('altB')));
     cv.width = Math.round(S * dpr); cv.height = Math.round(S * dpr);
     HW = hc.clientWidth; HH = hc.clientHeight; hc.width = Math.round(HW * dpr); hc.height = Math.round(HH * dpr);
     render();
@@ -699,6 +703,40 @@
     }
   }
 
+  // Noon-height icon: horizon, quarter arc to the zenith, sun placed at the noon altitude
+  const altIco = $('altIco');
+  function drawAltIcon(alt) {
+    const c = icoCtx(altIco), u = c.unit;
+    const ox = -11 * u, oy = 11 * u, R = 19.5 * u;   // keeps a sun at 90° inside the icon
+    const a = Math.max(-14, Math.min(90, alt)) * RAD;
+    // sky quarter (faint) and dashed arc to straight overhead
+    c.beginPath(); c.moveTo(ox, oy); c.arc(ox, oy, R, -Math.PI / 2, 0); c.closePath();
+    c.fillStyle = '#6f9fbd22'; c.fill();
+    c.setLineDash([2 * u, 2 * u]); c.strokeStyle = '#ffffff55'; c.lineWidth = 1 * u;
+    c.beginPath(); c.arc(ox, oy, R, -Math.PI / 2, 0); c.stroke();
+    c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox, oy - R); c.stroke();
+    c.setLineDash([]);
+    // shaded angle between horizon and the sun
+    if (a > 0) {
+      c.beginPath(); c.moveTo(ox, oy); c.arc(ox, oy, R * 0.45, -a, 0); c.closePath();
+      c.fillStyle = '#e9c46a55'; c.fill();
+    }
+    // ray to the sun
+    const sx = ox + Math.cos(a) * R, sy = oy - Math.sin(a) * R;
+    c.strokeStyle = '#e9c46acc'; c.lineWidth = 1.3 * u;
+    c.beginPath(); c.moveTo(ox, oy); c.lineTo(sx, sy); c.stroke();
+    // horizon (drawn after so a below-horizon sun sits under the line)
+    c.strokeStyle = '#d9dbe4'; c.lineWidth = 1.6 * u;
+    c.beginPath(); c.moveTo(ox - 2 * u, oy); c.lineTo(14 * u, oy); c.stroke();
+    // sun
+    c.beginPath(); c.arc(sx, sy, 3.6 * u, 0, Math.PI * 2);
+    c.fillStyle = alt >= 0 ? '#ffd24d' : '#8a7a3f';
+    if (alt >= 0) { c.shadowColor = '#ffd24d'; c.shadowBlur = 5 * u; }
+    c.fill(); c.shadowBlur = 0;
+    // observer
+    c.beginPath(); c.arc(ox, oy, 1.6 * u, 0, Math.PI * 2); c.fillStyle = '#d9dbe4'; c.fill();
+  }
+
   const xOf = d => INSET + d / (N - 1) * (HW - 2 * INSET);
   function drawHeat() {
     if (!HW || !heatImg) return;
@@ -843,6 +881,9 @@
     $('moonPct').textContent = `${Math.round(mo.k * 100)}%`;
     $('moonName').textContent = mo.name;
     drawMoonIcon(mo);
+    $('altDeg').textContent = `${D.noon.alt.toFixed(1)}°`;
+    $('altCap').textContent = D.noon.alt >= 0 ? `noon high ${fmtT(D.noon.m)}` : 'below horizon all day';
+    drawAltIcon(D.noon.alt);
     const mkm = moonDistanceKm(utcAt(YEAR, day, hm));
     const close = Math.max(0, Math.min(1, (MOON_FAR - mkm) / (MOON_FAR - MOON_NEAR)));
     $('moonClose').textContent = `${Math.round(close * 100)}%`;
