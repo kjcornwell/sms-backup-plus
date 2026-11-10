@@ -13,6 +13,7 @@
     --bg:#0b1428; --panel:#13213f; --panel2:#0e1a33; --line:#2e4068;
     --gold:#e9c46a; --gold-d:#3a2c0c; --ink:#2a1d05; --text:#f3ead7; --muted:#b9b2a0;
     --thumb-w:14px;
+    color-scheme:dark;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden}
@@ -792,7 +793,9 @@
   const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } };
 
   let saveT = 0, lastHash = location.hash.slice(1);
+  let embedded = false; try { embedded = window.top !== window.self; } catch { embedded = true; }
   function saveState() {
+    if (embedded) return;
     clearTimeout(saveT);
     saveT = setTimeout(() => {
       const q = new URLSearchParams({ y: YEAR, d: dayFloat + 1 });
@@ -1024,7 +1027,7 @@
         showResults(list.length ? list : local);
         status.textContent = list.length ? '' : 'No matches';
       } catch {
-        if (seq === searchSeq) status.textContent = 'Search unavailable offline. Showing built-in cities.';
+        if (seq === searchSeq) status.textContent = 'City search isn\'t available here. Pick a listed city or enter coordinates.';
       }
     }, 280);
   });
@@ -1036,7 +1039,7 @@
     navigator.geolocation.getCurrentPosition(pos => {
       setLocation({ name: 'My location', lat: pos.coords.latitude, lon: pos.coords.longitude,
                     tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
-    }, err => { status.textContent = err.code === 1 ? 'Location permission denied' : 'Could not get your location'; },
+    }, err => { status.textContent = err.code === 1 ? 'Location is blocked here. Pick a city or enter coordinates.' : 'Could not get your location'; },
     { timeout: 12000, maximumAge: 600000 });
   };
   $('mGo').onclick = () => {
@@ -1058,7 +1061,7 @@
     toast(`${loc.name} · ${loc.tz.replace(/_/g, ' ')}`);
   }
 
-  window.addEventListener('hashchange', () => { if (location.hash.slice(1) !== lastHash) location.reload(); });
+  if (!embedded) window.addEventListener('hashchange', () => { if (location.hash.slice(1) !== lastHash) location.reload(); });
 
   // ---------- init ----------
   $('legend').innerHTML = BANDS.map(b => `<span><i style="background:${b[2]}"></i>${b[0]}</span>`).join('');
