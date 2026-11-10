@@ -42,11 +42,13 @@
   .dialWrap{flex:1;min-height:150px;position:relative}
   #clock{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);touch-action:none;cursor:grab;display:block}
   #clock.drag{cursor:grabbing}
-  .badge{position:absolute;top:0;display:flex;align-items:center;gap:6px;pointer-events:none;z-index:1}
-  .badge.right{text-align:right}
-  .badge canvas{width:30px;height:30px;flex:none;display:block}
-  .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-m);line-height:1.05;font-variant-numeric:tabular-nums}
-  .badge span{display:block;font-family:var(--ui);font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
+  .badge{position:absolute;top:0;display:flex;align-items:center;gap:8px;pointer-events:none;z-index:1;--ico:clamp(36px,5.6vh,58px)}
+  .badge:not(.right){left:0}
+  .badge.right{right:0;text-align:right}
+  .badge canvas{width:var(--ico);height:var(--ico);flex:none;display:block}
+  .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-l);line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .badge span{display:block;font-family:var(--ui);font-size:var(--fs-s);color:var(--muted);white-space:nowrap;margin-top:2px}
+  #moonName{white-space:normal;max-width:5.2em;line-height:1.15;margin-left:auto}
   .metrics{flex:none;display:flex;flex-direction:column;gap:7px;min-width:0}
   @media (min-width:900px) and (min-height:560px){
     :root{--fs-xs:13px;--fs-s:16px;--fs-m:21px;--fs-l:30px}
@@ -504,10 +506,8 @@
     cv.style.width = cv.style.height = S + 'px';
     const offL = (wrapEl.clientWidth - S) / 2, offT = (wrapEl.clientHeight - S) / 2;
     const sb = $('sunB'), mb = $('moonB');
-    sb.style.left = offL + 'px'; sb.style.top = offT + 'px';
-    mb.style.right = offL + 'px'; mb.style.top = offT + 'px';
     const lim = b => {
-      const dx = S / 2 - b.offsetWidth, dy = S / 2 - b.offsetHeight;
+      const dx = S / 2 - (b.offsetWidth - offL), dy = S / 2 - (b.offsetHeight - offT);
       return dx > 0 && dy > 0 ? Math.hypot(dx, dy) - 6 : Math.max(dx, dy) - 6;
     };
     badgeLimit = Math.min(lim(sb), lim(mb));
@@ -643,18 +643,19 @@
   // Badge icons
   const sunIco = $('sunIco'), moonIco = $('moonIco');
   function icoCtx(cnv) {
-    const px = 30; cnv.width = px * dpr; cnv.height = px * dpr;
-    const c = cnv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, px / 2 * dpr, px / 2 * dpr); return c;   // translate is in device px
+    const px = cnv.clientWidth || 30; cnv.width = Math.round(px * dpr); cnv.height = Math.round(px * dpr);
+    const c = cnv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, px / 2 * dpr, px / 2 * dpr);   // translate is in device px
+    c.unit = px / 30; return c;
   }
   // Icon radius is stretched across the year's range (farthest → closest) so the change is visible;
   // true to scale it would differ by only ~3.4%.
   function drawSunIcon(rAU) {
     const c = icoCtx(sunIco);
     const t = Math.max(0, Math.min(1, (1 / rAU - 1 / R_APH) / (1 / R_PERI - 1 / R_APH)));
-    drawSunGlyph(c, 4.2 + 3.3 * t, true);
+    drawSunGlyph(c, (4.2 + 3.3 * t) * c.unit, true);
   }
   function drawMoonIcon(m) {
-    const c = icoCtx(moonIco), r = 12;
+    const c = icoCtx(moonIco), r = 12 * c.unit;
     c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fillStyle = '#26304d'; c.fill();
     c.lineWidth = 1; c.strokeStyle = '#ffffff33'; c.stroke();
     const waxing = m.e < 180;
