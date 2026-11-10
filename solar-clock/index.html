@@ -42,6 +42,11 @@
   .dialWrap{flex:1;min-height:150px;position:relative}
   #clock{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);touch-action:none;cursor:grab;display:block}
   #clock.drag{cursor:grabbing}
+  .badge{position:absolute;top:0;display:flex;align-items:center;gap:6px;pointer-events:none;z-index:1}
+  .badge.right{text-align:right}
+  .badge canvas{width:30px;height:30px;flex:none;display:block}
+  .badge b{display:block;font-family:var(--ui);font-weight:700;font-size:var(--fs-m);line-height:1.05;font-variant-numeric:tabular-nums}
+  .badge span{display:block;font-family:var(--ui);font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
   .metrics{flex:none;display:flex;flex-direction:column;gap:7px;min-width:0}
   @media (min-width:900px) and (min-height:560px){
     :root{--fs-xs:13px;--fs-s:16px;--fs-m:21px;--fs-l:30px}
@@ -158,6 +163,14 @@
 
   <main class="stage">
     <div class="dialWrap" id="dialWrap">
+      <div class="badge" id="sunB" title="Share of the day that is daylight">
+        <canvas id="sunIco" aria-hidden="true"></canvas>
+        <div><b id="dayPct">–</b><span>daylight</span></div>
+      </div>
+      <div class="badge right" id="moonB" title="Moon phase and illumination">
+        <div><b id="moonPct">–</b><span id="moonName"></span></div>
+        <canvas id="moonIco" aria-hidden="true"></canvas>
+      </div>
       <canvas id="clock" role="img" aria-label="24-hour solar clock. Drag around the dial to pick a time of day." title="Drag around the dial to pick a time of day"></canvas>
     </div>
     <div class="metrics">
@@ -287,6 +300,23 @@
     return (az + 360) % 360;
   }
   const compass = az => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(az / 22.5) % 16];
+
+  // Moon phase (low-precision lunar theory, good to a fraction of a degree): elongation from the sun → illumination
+  const MOON_NAMES = ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+  function moonInfo(ms) {
+    const d = ms / 864e5 + 2440587.5 - 2451545.0;
+    const M = (134.963 + 13.064993 * d) * RAD, D = (297.850 + 12.190749 * d) * RAD, Ms = (357.529 + 0.98560028 * d) * RAD;
+    const lamM = 218.316 + 13.176396 * d + 6.289 * Math.sin(M) - 1.274 * Math.sin(2 * D - M) + 0.658 * Math.sin(2 * D)
+               - 0.186 * Math.sin(Ms) - 0.059 * Math.sin(2 * D - 2 * M) - 0.057 * Math.sin(2 * D - M - Ms);
+    const lamS = 280.460 + 0.9856474 * d + 1.915 * Math.sin(Ms) + 0.020 * Math.sin(2 * Ms);
+    const e = (((lamM - lamS) % 360) + 360) % 360;          // 0 new, 90 first quarter, 180 full, 270 last quarter
+    const k = (1 - Math.cos(e * RAD)) / 2;                   // illuminated fraction
+    let idx;
+    const near = t => Math.abs(((e - t + 540) % 360) - 180) < 6;   // principal phases: within ~half a day
+    if (near(0)) idx = 0; else if (near(90)) idx = 2; else if (near(180)) idx = 4; else if (near(270)) idx = 6;
+    else idx = e < 90 ? 1 : e < 180 ? 3 : e < 270 ? 5 : 7;
+    return { e, k, name: MOON_NAMES[idx] };
+  }
 
   // ---------- time zones ----------
   const fmtCache = {};
@@ -455,13 +485,22 @@
   // ---------- canvases ----------
   const cv = $('clock'), ctx = cv.getContext('2d'), wrapEl = $('dialWrap');
   const hc = $('heat'), hx = hc.getContext('2d');
-  let S = 0, HW = 0, HH = 0, dpr = 1, heatImg = null;
+  let S = 0, HW = 0, HH = 0, dpr = 1, heatImg = null, badgeLimit = Infinity;
   const THUMB = 14, INSET = THUMB / 2;
 
   function resize() {
     dpr = Math.min(3, window.devicePixelRatio || 1);
     S = Math.max(100, Math.floor(Math.min(wrapEl.clientWidth, wrapEl.clientHeight)));
     cv.style.width = cv.style.height = S + 'px';
+    const offL = (wrapEl.clientWidth - S) / 2, offT = (wrapEl.clientHeight - S) / 2;
+    const sb = $('sunB'), mb = $('moonB');
+    sb.style.left = offL + 'px'; sb.style.top = offT + 'px';
+    mb.style.right = offL + 'px'; mb.style.top = offT + 'px';
+    const lim = b => {
+      const dx = S / 2 - b.offsetWidth, dy = S / 2 - b.offsetHeight;
+      return dx > 0 && dy > 0 ? Math.hypot(dx, dy) - 6 : Math.max(dx, dy) - 6;
+    };
+    badgeLimit = Math.min(lim(sb), lim(mb));
     cv.width = Math.round(S * dpr); cv.height = Math.round(S * dpr);
     HW = hc.clientWidth; HH = hc.clientHeight; hc.width = Math.round(HW * dpr); hc.height = Math.round(HH * dpr);
     render();
@@ -502,7 +541,7 @@
     ctx.font = `600 ${fontPx}px system-ui,sans-serif`;
     const labelW = Math.max(ctx.measureText('6AM').width, ctx.measureText('6PM').width);
     const cx = S / 2, cy = S / 2;
-    const Ro = Math.min(S * 0.44, S / 2 - 2 - gap - labelW);
+    const Ro = Math.min(S * 0.44, S / 2 - 2 - gap - labelW, badgeLimit);
     const Rm = Ro * 0.674, Ri = Ro * 0.342;
     const P = (r, m) => [cx + Math.cos(ang(m)) * r, cy + Math.sin(ang(m)) * r];
     const hm = hand();
@@ -571,26 +610,50 @@
     if (D.rise !== null) marker(D.rise, true);
     if (D.set !== null) marker(D.set, false);
 
-    // sun, or a crescent moon once the sun has set, on the outer edge
+    // sun on the outer edge (dimmed once it has set)
     const alt = D.alts[Math.min(SEG, Math.round(hm / STEP))];
     const [gx, gy] = P(Ro, hm), gr = Math.max(6, S * 0.024);
     ctx.save(); ctx.translate(gx, gy);
-    if (alt >= -0.833) {
-      ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = Math.max(1.5, S * 0.006);
-      for (let i = 0; i < 8; i++) {
-        const a = i * Math.PI / 4;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * gr * 1.45, Math.sin(a) * gr * 1.45);
-        ctx.lineTo(Math.cos(a) * gr * 1.95, Math.sin(a) * gr * 1.95); ctx.stroke();
-      }
-      ctx.beginPath(); ctx.arc(0, 0, gr, 0, Math.PI * 2); ctx.fillStyle = '#ffd24d';
-      ctx.shadowColor = '#ffd24d'; ctx.shadowBlur = 10; ctx.fill();
-    } else {
-      const r = gr * 1.25, c = r * 0.6, R2 = Math.hypot(c, r), th = Math.atan2(r, c);
-      ctx.beginPath(); ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, true);
-      ctx.arc(c, 0, R2, Math.PI - th, Math.PI + th, false);
-      ctx.closePath(); ctx.fillStyle = '#efe8d2'; ctx.shadowColor = '#efe8d2'; ctx.shadowBlur = 8; ctx.fill();
-    }
+    ctx.globalAlpha = alt >= -0.833 ? 1 : 0.45;
+    drawSunGlyph(ctx, gr, alt >= -0.833);
     ctx.restore();
+  }
+
+  function drawSunGlyph(c, r, glow) {
+    c.strokeStyle = '#ffd24d'; c.lineWidth = Math.max(1.5, r * 0.25); c.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      c.beginPath(); c.moveTo(Math.cos(a) * r * 1.45, Math.sin(a) * r * 1.45);
+      c.lineTo(Math.cos(a) * r * 1.95, Math.sin(a) * r * 1.95); c.stroke();
+    }
+    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fillStyle = '#ffd24d';
+    if (glow) { c.shadowColor = '#ffd24d'; c.shadowBlur = r; }
+    c.fill();
+  }
+  // Badge icons
+  const sunIco = $('sunIco'), moonIco = $('moonIco');
+  function icoCtx(cnv) {
+    const px = 30; cnv.width = px * dpr; cnv.height = px * dpr;
+    const c = cnv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, px / 2 * dpr, px / 2 * dpr); return c;   // translate is in device px
+  }
+  function drawSunIcon(frac) {
+    const c = icoCtx(sunIco);
+    const r = Math.max(1.5, 7.5 * Math.sqrt(Math.max(0, Math.min(1, frac))));   // area ∝ daylight share
+    drawSunGlyph(c, r, true);
+  }
+  function drawMoonIcon(m) {
+    const c = icoCtx(moonIco), r = 12;
+    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fillStyle = '#26304d'; c.fill();
+    c.lineWidth = 1; c.strokeStyle = '#ffffff33'; c.stroke();
+    const waxing = m.e < 180;
+    c.save();
+    if (waxing !== (loc.lat >= 0)) c.scale(-1, 1);          // lit limb on the right while waxing (northern sky)
+    const k = m.k, rx = r * Math.abs(1 - 2 * k);
+    c.beginPath();
+    c.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false);          // lit half
+    c.ellipse(0, 0, rx, r, 0, Math.PI / 2, k < 0.5 ? -Math.PI / 2 : Math.PI * 1.5, k < 0.5);   // terminator
+    c.closePath(); c.fillStyle = '#efe8d2'; c.fill();
+    c.restore();
   }
 
   const xOf = d => INSET + d / (N - 1) * (HW - 2 * INSET);
@@ -728,6 +791,14 @@
     slider.setAttribute('aria-valuetext', `${dateFmt.format(dt)}, ${YEAR}`);
     document.querySelectorAll('#markers .chip').forEach(c => c.classList.toggle('on', +c.dataset.d === day));
 
+
+    const frac = D.len / 1440;
+    $('dayPct').textContent = `${Math.round(frac * 100)}%`;
+    drawSunIcon(frac);
+    const mo = moonInfo(utcAt(YEAR, day, hm));
+    $('moonPct').textContent = `${Math.round(mo.k * 100)}%`;
+    $('moonName').textContent = mo.name;
+    drawMoonIcon(mo);
 
     renderTw(D);
     saveState();
