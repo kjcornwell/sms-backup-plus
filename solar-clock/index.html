@@ -29,19 +29,13 @@
   .top{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;
        padding:8px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
   .pill{font-family:var(--sc);letter-spacing:.1em;font-size:var(--fs-s);color:var(--gold);background:var(--gold-d);
-        border:0;border-radius:11px;padding:6px 12px;cursor:pointer;min-width:0;max-width:65%;
+        border:0;border-radius:11px;padding:6px 12px;cursor:pointer;min-width:0;max-width:100%;
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .now{display:flex;align-items:center;gap:8px;flex:none}
-  .tag{font-family:var(--sc);background:var(--gold);color:var(--ink);border-radius:9px;padding:1px 9px;
-       font-size:var(--fs-s);letter-spacing:.1em;border:1px solid var(--gold);cursor:default}
-  .tag.set{background:transparent;color:var(--gold);cursor:pointer}
-  .now .t{font-family:var(--sc);font-size:var(--fs-m);letter-spacing:.05em;font-variant-numeric:tabular-nums}
 
   .stage{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;
          padding:6px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px))}
   .dialWrap{flex:1;min-height:150px;position:relative}
-  #clock{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);touch-action:none;cursor:grab;display:block}
-  #clock.drag{cursor:grabbing}
+  #clock{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block}
   .badge{position:absolute;top:0;display:flex;align-items:center;gap:8px;pointer-events:none;z-index:1;--ico:clamp(36px,5.6vh,58px)}
   .badge:not(.right){left:0}
   .badge.right{right:0;text-align:right}
@@ -80,10 +74,8 @@
   .tw .h i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0;border:1px solid #fff3}
   .tw .h em{display:block;font-style:normal;opacity:.7}
   .tw .rl{font-family:var(--ui);font-size:var(--fs-xs);color:var(--muted);padding-right:4px}
-  .tw button{background:none;border:0;border-radius:8px;padding:3px 0;cursor:pointer;font-family:var(--serif);font-weight:600;
+  .tw button{background:none;border:0;border-radius:8px;padding:3px 0;cursor:default;font-family:var(--serif);font-weight:600;
              font-size:var(--fs-m);white-space:nowrap;font-variant-numeric:tabular-nums}
-  .tw button:hover{background:#ffffff0c}
-  .tw button.cur{background:#e9c46a22;box-shadow:inset 0 0 0 1px #e9c46a66}
   .tw button:disabled{color:var(--muted);cursor:default}
 
   /* pinned bottom control bar */
@@ -161,7 +153,6 @@
 <div class="app">
   <div class="top">
     <button class="pill" id="locBtn" title="Change location">📍 Destin, Florida</button>
-    <div class="now"><button class="tag" id="nowTag">Now</button><span class="t" id="nowT"></span></div>
   </div>
 
   <main class="stage">
@@ -182,7 +173,7 @@
         <div><b id="moonClose">–</b><span id="moonKm"></span></div>
         <canvas id="moonDIco" aria-hidden="true"></canvas>
       </div>
-      <canvas id="clock" role="img" aria-label="24-hour solar clock. Drag around the dial to pick a time of day." title="Drag around the dial to pick a time of day"></canvas>
+      <canvas id="clock" role="img" aria-label="24-hour solar clock for the selected day"></canvas>
     </div>
     <div class="metrics">
       <div class="tiles">
@@ -488,7 +479,7 @@
   const savedLoc = store.get('loc');
   if (savedLoc && typeof savedLoc.lat === 'number' && typeof savedLoc.lon === 'number' && validTz(savedLoc.tz)) loc = savedLoc;
 
-  let YEAR, N, day, selMin = null, nowMin, playing = false;
+  let YEAR, N, day, nowMin, playing = false;
   const SPEEDS = [['½×', 28], ['1×', 14], ['2×', 7], ['4×', 3.5]];
   let speedIdx = store.get('speed2');
   if (!Number.isInteger(speedIdx) || speedIdx < 0 || speedIdx >= SPEEDS.length) speedIdx = 2;   // default 2×
@@ -507,14 +498,13 @@
       }
       const qy = parseInt(q.get('y')); if (qy >= 1900 && qy <= 2100) YEAR = qy;
       const qd = parseInt(q.get('d')); if (qd >= 1 && qd <= daysIn(YEAR)) day = qd - 1;
-      const qt = parseInt(q.get('t')); if (qt >= 0 && qt < 1440) selMin = qt;
     } catch {}
     nowMin = localNow().minute;
     N = daysIn(YEAR);
   })();
 
   const slider = $('day');
-  const hand = () => selMin ?? nowMin;
+  const hand = () => 720;   // per-day snapshot: moon figures are for local noon
 
   // ---------- canvases ----------
   const cv = $('clock'), ctx = cv.getContext('2d'), wrapEl = $('dialWrap');
@@ -642,13 +632,6 @@
     if (D.rise !== null) marker(D.rise, true);
     if (D.set !== null) marker(D.set, false);
 
-    // sun on the outer edge (dimmed once it has set)
-    const alt = D.alts[Math.min(SEG, Math.round(hm / STEP))];
-    const [gx, gy] = P(Ro, hm), gr = Math.max(6, S * 0.024);
-    ctx.save(); ctx.translate(gx, gy);
-    ctx.globalAlpha = alt >= -0.833 ? 1 : 0.45;
-    drawSunGlyph(ctx, gr, alt >= -0.833);
-    ctx.restore();
   }
 
   function drawSunGlyph(c, r, glow) {
@@ -755,9 +738,6 @@
       const x = Math.round(xOf(doyOf(YEAR, m, 1) - 0.5)) + .5;
       hx.beginPath(); hx.moveTo(x, 0); hx.lineTo(x, HH); hx.stroke();
     }
-    const yT = hand() / 1440 * HH;
-    hx.strokeStyle = 'rgba(255,248,230,.75)'; hx.setLineDash([3, 3]);
-    hx.beginPath(); hx.moveTo(0, yT); hx.lineTo(HW, yT); hx.stroke(); hx.setLineDash([]);
     const ln = localNow();
     if (ln.y === YEAR) {
       const tx = xOf(ln.doy);
@@ -822,7 +802,6 @@
       const rl = document.createElement('div'); rl.className = 'rl'; rl.textContent = label; tw.appendChild(rl);
       TW_COLS.forEach((c, ci) => {
         const b = document.createElement('button');
-        b.onclick = () => { const v = parseFloat(b.dataset.m); if (!isNaN(v)) animateTime(v); };
         b.title = `${ri ? 'Evening' : 'Morning'}: sun crosses ${c.deg}`;
         tw.appendChild(b); twCells.push([b, ri, ci]);
       });
@@ -835,7 +814,6 @@
       b.disabled = m === null;
       b.dataset.m = m === null ? '' : m;
       b.textContent = m === null ? '—' : fmtShort(m);
-      b.classList.toggle('cur', m !== null && Math.abs(wrap1440(hm - m + 720) - 720) < 2);
     }
   }
 
@@ -848,12 +826,7 @@
     drawHeat();
     const hm = hand();
     const ph = phaseAt(D.outer, hm);
-    cv.setAttribute('aria-label', `24-hour solar clock. ${BANDS[ph.b][0]} at ${fmtT(hm)}. Drag around the dial to pick a time of day.`);
-    $('nowT').textContent = fmtT(hm);
-    const tag = $('nowTag');
-    tag.textContent = selMin === null ? 'Now' : '↺ Now';
-    tag.classList.toggle('set', selMin !== null);
-    tag.title = selMin === null ? 'Showing the current time' : 'Back to the current time';
+    cv.setAttribute('aria-label', `24-hour solar clock for ${dateFmt.format(new Date(Date.UTC(YEAR, 0, 1 + day)))}: sunrise ${D.rise !== null ? fmtT(D.rise) : 'none'}, sunset ${D.set !== null ? fmtT(D.set) : 'none'}.`);
 
     $('sRise').textContent = D.rise !== null ? fmtT(D.rise) : '—';
     $('sSet').textContent = D.set !== null ? fmtT(D.set) : '—';
@@ -902,7 +875,6 @@
     clearTimeout(saveT);
     saveT = setTimeout(() => {
       const q = new URLSearchParams({ y: YEAR, d: day + 1 });
-      if (selMin !== null) q.set('t', Math.round(selMin));
       q.set('lat', loc.lat.toFixed(4)); q.set('lon', loc.lon.toFixed(4)); q.set('tz', loc.tz); q.set('n', loc.name);
       lastHash = q.toString();
       try { history.replaceState(null, '', '#' + lastHash); } catch {}
@@ -910,8 +882,6 @@
   }
 
   // ---------- helpers ----------
-  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  let timeAnim = 0;
   // Jump straight to a whole day: one snapshot per day, never in-between
   function goToDay(target) {
     setPlaying(false);
@@ -923,21 +893,6 @@
     setPlaying(false);
     if (y !== YEAR) { YEAR = y; day = d; buildYear(); schedule(); }
     else goToDay(d);
-  }
-  function animateTime(target, dur = 380, then) {
-    cancelAnimationFrame(timeAnim);
-    const from = hand();
-    let diff = wrap1440(target - from); if (diff > 720) diff -= 1440;
-    const t0 = performance.now();
-    if (reduceMotion) { selMin = wrap1440(target); if (then) then(); schedule(); return; }
-    const step = t => {
-      const k = Math.min(1, (t - t0) / dur);
-      selMin = wrap1440(from + diff * ease(k));
-      if (k >= 1 && then) then();
-      render();
-      if (k < 1) timeAnim = requestAnimationFrame(step);
-    };
-    timeAnim = requestAnimationFrame(step);
   }
   const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} };
   let toastT = 0;
@@ -1033,46 +988,14 @@
   };
   $('speed').onclick = () => { speedIdx = (speedIdx + 1) % SPEEDS.length; store.set('speed2', speedIdx); setSpeedLbl(); };
 
-  function goNow() {
-    if (selMin === null) return;
-    animateTime(nowMin, 380, () => { selMin = null; });
-  }
   function goToday() {
     const ln = localNow();
     setDate(ln.y, ln.doy);
-    goNow();
   }
   $('todayBtn').onclick = goToday;
-  $('nowTag').onclick = goNow;
 
-  // drag around the dial to set the time of day (snaps to sunrise, sunset, solar noon)
-  let dragging = false, lastSnap = null;
-  function minuteFromPointer(e) {
-    const r = cv.getBoundingClientRect();
-    const x = e.clientX - r.left - r.width / 2, y = e.clientY - r.top - r.height / 2;
-    return { m: wrap1440((Math.atan2(y, x) - Math.PI / 2) / (Math.PI * 2) * 1440), dist: Math.hypot(x, y) / r.width };
-  }
-  function setFromPointer(e) {
-    let { m } = minuteFromPointer(e);
-    const D = currentData;
-    const snaps = [D.rise, D.set, D.noon.m].filter(v => v !== null);
-    const near = snaps.find(s => Math.abs(wrap1440(m - s + 720) - 720) < 5);
-    if (near !== undefined) { m = near; if (lastSnap !== near) buzz(10); lastSnap = near; } else lastSnap = null;
-    cancelAnimationFrame(timeAnim);
-    selMin = m; schedule();
-  }
-  cv.addEventListener('pointerdown', e => {
-    const { dist } = minuteFromPointer(e);
-    if (dist < 0.05 || dist > 0.5) return;
-    dragging = true; cv.classList.add('drag');
-    try { cv.setPointerCapture(e.pointerId); } catch {}
-    setFromPointer(e);
-  });
-  cv.addEventListener('pointermove', e => { if (dragging) setFromPointer(e); });
-  const endDrag = () => { dragging = false; cv.classList.remove('drag'); };
-  cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
-  // keyboard: Space play, ←/→ day (Shift = week), ↑/↓ 15 min, T today, N now, L location
+  // keyboard: Space play, ←/→ day (Shift = week), T today, L location
   document.addEventListener('keydown', e => {
     if (dlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
     const tgt = e.target, k = e.key;
@@ -1082,13 +1005,7 @@
     else if (k === 'ArrowLeft' || k === 'ArrowRight') {
       e.preventDefault(); nudgeDay((k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 7 : 1));
     }
-    else if (k === 'ArrowUp' || k === 'ArrowDown') {
-      if (tgt === slider) return;
-      e.preventDefault(); cancelAnimationFrame(timeAnim);
-      selMin = wrap1440(Math.round((hand() + (k === 'ArrowUp' ? 15 : -15)) / 15) * 15); schedule();
-    }
     else if (k === 't' || k === 'T') goToday();
-    else if (k === 'n' || k === 'N') goNow();
     else if (k === 'l' || k === 'L') { e.preventDefault(); openLoc(); }
   });
 
@@ -1177,7 +1094,7 @@
   if (window.ResizeObserver) { new ResizeObserver(resize).observe(wrapEl); new ResizeObserver(resize).observe(hc); }
   window.addEventListener('resize', resize);
   resize();
-  setInterval(() => { nowMin = localNow().minute; if (!playing && !dragging) schedule(); }, 15000);
+  setInterval(() => { if (!playing) schedule(); }, 60000);   // roll over to a new 'today' at midnight
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) setPlaying(false); else { nowMin = localNow().minute; schedule(); }
   });
