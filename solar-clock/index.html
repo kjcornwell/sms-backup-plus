@@ -49,6 +49,7 @@
   .stats b{display:block;font-size:17px;white-space:nowrap}
   .stats span{font-size:12px;color:var(--muted);font-family:system-ui,sans-serif}
 
+  .scrub{margin:2px 0 14px}
   .scrub-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .btn{width:46px;height:46px;border-radius:50%;border:0;background:var(--gold);color:var(--ink);flex:none;
        display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 10px #0007}
@@ -153,17 +154,7 @@
         <div class="loc"><button class="pill" id="locBtn" title="Change location">📍 Destin, Florida</button></div>
         <canvas id="clock" role="img" aria-label="24-hour solar clock"></canvas>
         <div class="hint">Drag around the dial to pick a time of day</div>
-        <div class="stats">
-          <div><b id="sRise">–</b><span>Sunrise</span></div>
-          <div><b id="sSet">–</b><span>Sunset</span></div>
-          <div><b id="sLen">–</b><span>Daylight</span></div>
-          <div><b id="sDelta">–</b><span>vs today</span></div>
-        </div>
-      </section>
-    </div>
-
-    <div class="right">
-      <section class="card" aria-label="Date scrubber">
+        <div class="scrub" aria-label="Date scrubber">
         <div class="scrub-head">
           <button class="btn" id="play" aria-label="Play through the year"></button>
           <div class="date"><div id="dateLabel">–</div><div id="dateSub"></div></div>
@@ -174,7 +165,7 @@
         </div>
         <div class="track">
           <canvas id="heat" aria-hidden="true"></canvas>
-          <input type="range" id="day" min="0" step="any" aria-label="Day of year">
+          <input type="range" id="day" min="0" step="1" aria-label="Day of year">
         </div>
         <div class="months" id="months"></div>
         <div class="markers" id="markers"></div>
@@ -189,8 +180,17 @@
           </div>
           <button class="ghost" id="todayBtn">Today</button>
         </div>
+        </div>
+        <div class="stats">
+          <div><b id="sRise">–</b><span>Sunrise</span></div>
+          <div><b id="sSet">–</b><span>Sunset</span></div>
+          <div><b id="sLen">–</b><span>Daylight</span></div>
+          <div><b id="sDelta">–</b><span>vs today</span></div>
+        </div>
       </section>
+    </div>
 
+    <div class="right">
       <section class="card">
         <div class="info">
           <div class="dot" id="phDot"></div>
@@ -366,15 +366,9 @@
     }
     return a;
   }
-  // Fractional days blend two neighbouring days at the same clock time, so scrubbing
-  // moves the date smoothly without rotating the clock.
-  function samples(y, df) {
-    const d0 = Math.min(Math.floor(df), daysIn(y) - 1), f = Math.max(0, Math.min(1, df - d0));
-    const A = daySamples(y, d0);
-    if (f < 1e-4) return A;
-    const B = daySamples(y, d0 + 1), out = new Float64Array(SEG + 1);
-    for (let i = 0; i <= SEG; i++) out[i] = A[i] + (B[i] - A[i]) * f;
-    return out;
+  // One snapshot per whole calendar day; there are no in-between states.
+  function samples(y, d) {
+    return daySamples(y, Math.max(0, Math.min(Math.round(d), daysIn(y) - 1)));
   }
   function bandOf(a, th) { for (let i = 0; i < th.length; i++) if (a >= th[i]) return i; return th.length; }
   // Runs of [startMin, endMin, band] with interpolated boundaries
@@ -779,7 +773,7 @@
     const delta = D.len - todayLen;
     $('sDelta').textContent = Math.abs(delta) < 0.5 ? '—' : `${delta > 0 ? '+' : '−'}${fmtD(delta)}`;
 
-    const d0 = Math.min(Math.floor(dayFloat + 1e-6), N - 1);
+    const d0 = dayFloat;
     const dt = new Date(Date.UTC(YEAR, 0, 1 + d0));
     const ln = localNow(), isToday = ln.y === YEAR && ln.doy === d0;
     $('dateLabel').textContent = dateFmt.format(dt);
@@ -801,7 +795,7 @@
   function saveState() {
     clearTimeout(saveT);
     saveT = setTimeout(() => {
-      const q = new URLSearchParams({ y: YEAR, d: Math.round(dayFloat) + 1 });
+      const q = new URLSearchParams({ y: YEAR, d: dayFloat + 1 });
       if (selMin !== null) q.set('t', Math.round(selMin));
       q.set('lat', loc.lat.toFixed(4)); q.set('lon', loc.lon.toFixed(4)); q.set('tz', loc.tz); q.set('n', loc.name);
       lastHash = q.toString();
@@ -811,20 +805,13 @@
 
   // ---------- animation helpers ----------
   const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  let dayAnim = 0, timeAnim = 0, dayTarget = null;
-  function goToDay(target, dur = 520) {
+  let timeAnim = 0;
+  // Jump straight to a whole day (no tweening through in-between days)
+  function goToDay(target) {
     setPlaying(false);
-    target = Math.max(0, Math.min(N - 1, target));
-    cancelAnimationFrame(dayAnim);
-    const from = dayFloat, t0 = performance.now();
-    if (reduceMotion || Math.abs(target - from) < 0.01) { dayTarget = null; dayFloat = target; slider.value = target; schedule(); return; }
-    dayTarget = target;
-    const step = t => {
-      const k = Math.min(1, (t - t0) / dur);
-      dayFloat = from + (target - from) * ease(k); slider.value = dayFloat; render();
-      if (k < 1) dayAnim = requestAnimationFrame(step); else dayTarget = null;
-    };
-    dayAnim = requestAnimationFrame(step);
+    dayFloat = Math.max(0, Math.min(N - 1, Math.round(target)));
+    slider.value = dayFloat;
+    schedule();
   }
   function animateTime(target, dur = 380, then) {
     cancelAnimationFrame(timeAnim);
@@ -851,24 +838,25 @@
   // ---------- playback ----------
   const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor"/></svg>';
-  let lastT = 0, playRaf = 0;
+  let lastT = 0, playRaf = 0, playPos = 0;
   function setPlaying(p) {
     playing = p;
     $('play').innerHTML = p ? ICON_PAUSE : ICON_PLAY;
     $('play').setAttribute('aria-label', p ? 'Pause' : 'Play through the year');
     cancelAnimationFrame(playRaf);
-    if (p) { cancelAnimationFrame(dayAnim); dayTarget = null; lastT = performance.now(); playRaf = requestAnimationFrame(tick); }
+    if (p) { playPos = dayFloat; lastT = performance.now(); playRaf = requestAnimationFrame(tick); }
   }
   function tick(t) {
     if (!playing) return;
     const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
-    dayFloat += dt * N / SPEEDS[speedIdx][1];
-    if (dayFloat > N - 1) {
-      dayFloat -= N - 1;
+    // Advance a hidden accumulator; only redraw when it crosses into a new whole day.
+    playPos += dt * N / SPEEDS[speedIdx][1];
+    if (playPos >= N) {
+      playPos -= N;
       if (!loopYear) { YEAR++; buildYear(); }
     }
-    slider.value = dayFloat;
-    render();
+    const d = Math.min(N - 1, Math.floor(playPos));
+    if (d !== dayFloat) { dayFloat = d; slider.value = d; render(); }
     playRaf = requestAnimationFrame(tick);
   }
 
@@ -876,17 +864,13 @@
   let lastMonth = -1;
   slider.addEventListener('input', () => {
     if (playing) setPlaying(false);
-    cancelAnimationFrame(dayAnim); dayTarget = null;
-    dayFloat = +slider.value;
-    const m = new Date(Date.UTC(YEAR, 0, 1 + Math.floor(dayFloat))).getUTCMonth();
+    const d = Math.round(+slider.value);
+    if (d === dayFloat) return;
+    dayFloat = d;
+    const m = new Date(Date.UTC(YEAR, 0, 1 + dayFloat)).getUTCMonth();
     if (lastMonth !== -1 && m !== lastMonth) buzz(6);
     lastMonth = m;
     schedule();
-  });
-  slider.addEventListener('change', () => {
-    const v = +slider.value;
-    const near = markers.find(m => Math.abs(m - v) < 1.6);   // gentle snap to solstices/equinoxes
-    goToDay(near !== undefined ? near : Math.round(v), 160);
   });
   slider.addEventListener('keydown', e => {
     const k = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1, PageDown: -30, PageUp: 30 }[e.key];
@@ -897,9 +881,8 @@
 
   function nudgeDay(n) {
     setPlaying(false);
-    let target = (dayTarget ?? Math.round(dayFloat)) + n;
-    if (target >= 0 && target <= N - 1) return goToDay(target, 180);
-    cancelAnimationFrame(dayAnim); dayTarget = null;
+    let target = dayFloat + n;
+    if (target >= 0 && target <= N - 1) return goToDay(target);
     if (target < 0) { YEAR--; dayFloat = 0; buildYear(); target += N; }
     else { target -= N; YEAR++; dayFloat = 0; buildYear(); }
     dayFloat = target; slider.value = target; schedule();
