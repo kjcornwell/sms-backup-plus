@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Solar Year Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Cormorant+SC:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1428; --panel:#13213f; --panel2:#0e1a33; --line:#2e4068;
+    --gold:#e9c46a; --gold-d:#3a2c0c; --text:#f3ead7; --muted:#b9b2a0;
+    --thumb:26px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden}
+  body{font-family:"Cormorant Garamond",Georgia,serif;-webkit-tap-highlight-color:transparent}
+  .wrap{width:100%;max-width:520px;margin:0 auto;padding:16px 16px 40px}
+
+  header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .logo{width:52px;height:52px;border-radius:14px;flex:none;position:relative;overflow:hidden;
+        background:linear-gradient(#f39a4a 0 55%,#7b5aa6 55%)}
+  .logo::before{content:"";position:absolute;left:50%;top:30%;width:20px;height:20px;margin-left:-10px;
+        border-radius:50%;background:#ffd34d;box-shadow:0 0 12px #ffd34d}
+  h1{font-family:"Cormorant SC",serif;font-size:28px;margin:0;letter-spacing:.04em;line-height:1}
+  header p{margin:2px 0 0;color:var(--muted);font-size:16px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:14px;margin-bottom:16px}
+  .loc{display:flex;justify-content:center;margin:2px 0 6px}
+  .pill{font-family:"Cormorant SC",serif;letter-spacing:.12em;font-size:17px;color:var(--gold);
+        background:var(--gold-d);border:0;border-radius:12px;padding:8px 16px;cursor:pointer;max-width:100%;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #clock{display:block;width:100%;aspect-ratio:1/1}
+
+  .info{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px 14px;
+        display:flex;gap:10px;align-items:flex-start}
+  .dot{width:14px;height:14px;border-radius:50%;flex:none;margin-top:7px;border:1px solid #fff4}
+  .info .main{flex:1;min-width:0}
+  .info .name{font-size:24px;font-weight:700;line-height:1.1}
+  .info .win{font-size:17px}
+  .info .desc{font-size:16px;color:var(--muted)}
+  .now{text-align:right;flex:none}
+  .now .tag{display:inline-block;font-family:"Cormorant SC",serif;background:var(--gold);color:#2a1d05;
+            border-radius:10px;padding:1px 10px;font-size:15px;letter-spacing:.1em}
+  .now .t{font-family:"Cormorant SC",serif;font-size:19px;letter-spacing:.06em;margin-top:4px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;text-align:center}
+  .stats div{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 2px}
+  .stats b{display:block;font-size:17px}
+  .stats span{font-size:13px;color:var(--muted);font-family:system-ui,sans-serif}
+
+  .scrub-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .btn{width:46px;height:46px;border-radius:50%;border:0;background:var(--gold);color:#2a1d05;flex:none;
+       display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 10px #0007}
+  .btn svg{width:20px;height:20px}
+  .date{flex:1;min-width:0}
+  #dateLabel{font-size:24px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #dateSub{font-size:15px;color:var(--muted)}
+  .ghost{border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:12px;
+         font-family:"Cormorant SC",serif;font-size:15px;letter-spacing:.08em;padding:6px 10px;cursor:pointer;flex:none}
+
+  .track{position:relative;width:100%;height:52px}
+  #spark{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #day{-webkit-appearance:none;appearance:none;position:absolute;inset:0;width:100%;height:100%;
+       margin:0;background:transparent;cursor:grab;touch-action:pan-y}
+  #day:active{cursor:grabbing}
+  #day::-webkit-slider-runnable-track{height:52px;background:transparent}
+  #day::-moz-range-track{height:52px;background:transparent}
+  #day::-webkit-slider-thumb{-webkit-appearance:none;width:var(--thumb);height:var(--thumb);border-radius:50%;
+       background:var(--gold);border:3px solid #fff8e6;box-shadow:0 2px 10px #000a;margin-top:13px}
+  #day::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--gold);
+       border:3px solid #fff8e6;box-shadow:0 2px 10px #000a}
+  #day:focus-visible{outline:2px solid var(--gold);outline-offset:4px;border-radius:8px}
+  .months{position:relative;height:20px;margin-top:4px;font-family:system-ui,sans-serif;font-size:11.5px;color:var(--muted)}
+  .months span{position:absolute;transform:translateX(-50%);top:0}
+  @media (max-width:420px){.months span{font-size:0}.months span::after{content:attr(data-s);font-size:11.5px}}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-family:system-ui,sans-serif;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div><h1>Solar Clock</h1><p>Scrub through the year</p></div>
+  </header>
+
+  <section class="card">
+    <div class="loc"><button class="pill" id="locBtn" title="Tap to use your GPS location">📍 Destin, Florida</button></div>
+    <canvas id="clock" aria-label="24-hour solar clock"></canvas>
+    <div class="info">
+      <div class="dot" id="phDot"></div>
+      <div class="main">
+        <div class="name" id="phName">–</div>
+        <div class="win" id="phWin"></div>
+        <div class="desc" id="phDesc"></div>
+      </div>
+      <div class="now"><span class="tag">Now</span><div class="t" id="nowT"></div></div>
+    </div>
+    <div class="stats">
+      <div><b id="sRise">–</b><span>Sunrise</span></div>
+      <div><b id="sSet">–</b><span>Sunset</span></div>
+      <div><b id="sLen">–</b><span>Daylight</span></div>
+      <div><b id="sDelta">–</b><span>vs today</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="scrub-head">
+      <button class="btn" id="play" aria-label="Play through the year"></button>
+      <div class="date"><div id="dateLabel">–</div><div id="dateSub"></div></div>
+      <button class="ghost" id="todayBtn">Today</button>
+    </div>
+    <div class="track">
+      <canvas id="spark" aria-hidden="true"></canvas>
+      <input type="range" id="day" min="0" step="any" aria-label="Day of year">
+    </div>
+    <div class="months" id="months"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const RAD = Math.PI / 180, STEP = 4, SEG = 1440 / STEP;
+  const $ = id => document.getElementById(id);
+
+  let loc = { name: 'Destin, Florida', lat: 30.3935, lon: -86.4958, tz: 'America/Chicago' };
+  const YEAR = new Date().getFullYear();
+  const N = ((YEAR % 4 === 0 && YEAR % 100 !== 0) || YEAR % 400 === 0) ? 366 : 365;
+
+  // Altitude bands (degrees), highest first
+  const TH = [6, -0.833, -4, -6, -12, -18];
+  const BANDS = [
+    ['Daytime', 'Sun well above the horizon', '#6f9fbd'],
+    ['Golden Hour', 'Low, warm sunlight', '#dca244'],
+    ['Civil Twilight', 'Sun just below the horizon', '#c8563f'],
+    ['Blue Hour', 'Deep blue sky, last of the color', '#985a9c'],
+    ['Nautical Twilight', 'Horizon fading, first stars', '#4c66bf'],
+    ['Astronomical Twilight', 'Faint glow before full dark', '#18234a'],
+    ['Nighttime', 'Sun far below the horizon', '#05080f'],
+  ];
+  const TH_MID = [6, -0.833];
+  const MID_C = ['#6f9fbd', '#dca244', '#05080f'];
+
+  // ---------- astronomy ----------
+  function sunAlt(ms, lat, lon) {
+    const n = ms / 864e5 + 2440587.5 - 2451545.0;
+    const L = (280.460 + 0.9856474 * n) % 360;
+    const g = (357.528 + 0.9856003 * n) * RAD;
+    const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * RAD;
+    const eps = (23.439 - 0.0000004 * n) * RAD;
+    const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam));
+    const dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+    const gmst = (18.697374558 + 24.06570982441908 * n) % 24;
+    const ha = (gmst * 15 + lon) * RAD - ra;
+    const la = lat * RAD;
+    return Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha)) / RAD;
+  }
+
+  const fmtCache = {};
+  function tzOffsetMin(ms, tz) {
+    const f = fmtCache[tz] || (fmtCache[tz] = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric' }));
+    const p = {};
+    for (const x of f.formatToParts(ms)) p[x.type] = x.value;
+    const asUTC = Date.UTC(+p.year, p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+    return Math.round((asUTC - Math.floor(ms / 1000) * 1000) / 6e4);
+  }
+  let midCache = {};
+  function midnightUTC(d) {
+    const k = loc.tz + d;
+    if (midCache[k] === undefined) {
+      const off = tzOffsetMin(Date.UTC(YEAR, 0, 1 + d, 12), loc.tz);
+      midCache[k] = Date.UTC(YEAR, 0, 1 + d) - off * 6e4;
+    }
+    return midCache[k];
+  }
+
+  function samples(df) {
+    const d0 = Math.min(Math.floor(df), N - 1), frac = df - d0;
+    const base = midnightUTC(d0) + frac * 864e5;
+    const a = new Float64Array(SEG + 1);
+    for (let i = 0; i <= SEG; i++) a[i] = sunAlt(base + i * STEP * 6e4, loc.lat, loc.lon);
+    return a;
+  }
+  function bandOf(a, th) { const i = th.findIndex(t => a >= t); return i < 0 ? th.length : i; }
+  // Runs of [startMin, endMin, band], with exact (interpolated) boundaries
+  function runs(alts, th) {
+    const out = []; let start = 0, b = bandOf(alts[0], th);
+    for (let i = 0; i < SEG; i++) {
+      const a0 = alts[i], a1 = alts[i + 1], b1 = bandOf(a1, th);
+      if (b1 === b) continue;
+      const dir = b1 > b ? 1 : -1;
+      while (b !== b1) {
+        const t = dir > 0 ? th[b] : th[b - 1];
+        const m = (i + (t - a0) / (a1 - a0)) * STEP;
+        out.push([start, m, b]); start = m; b += dir;
+      }
+    }
+    out.push([start, 1440, b]);
+    return out;
+  }
+  function riseSet(alts, t = -0.833) {
+    let rise = null, set = null;
+    for (let i = 0; i < SEG; i++) {
+      const a0 = alts[i], a1 = alts[i + 1];
+      if (a0 < t && a1 >= t && rise === null) rise = (i + (t - a0) / (a1 - a0)) * STEP;
+      if (a0 >= t && a1 < t) set = (i + (t - a0) / (a1 - a0)) * STEP;
+    }
+    let len;
+    if (rise !== null && set !== null) len = set > rise ? set - rise : 1440 - (rise - set);
+    else len = Math.max(...alts) >= t ? 1440 : 0;
+    return { rise, set, len };
+  }
+  function dayData(df) {
+    const alts = samples(df);
+    return { alts, outer: runs(alts, TH), mid: runs(alts, TH_MID), ...riseSet(alts) };
+  }
+  function phaseAt(rs, m) {
+    let k = rs.findIndex(r => m >= r[0] && m < r[1]);
+    if (k < 0) k = rs.length - 1;
+    let [s, e, b] = rs[k];
+    const last = rs.length - 1;
+    if (rs.length > 1) {
+      if (k === 0 && rs[last][2] === b) s = rs[last][0] - 1440;
+      if (k === last && rs[0][2] === b) e = rs[0][1] + 1440;
+    }
+    return { s, e, b, whole: rs.length === 1 };
+  }
+
+  // ---------- formatting ----------
+  const fmtT = min => {
+    const m = ((Math.round(min) % 1440) + 1440) % 1440;
+    const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, '0');
+    return `${(h % 12) || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const fmtD = min => { const m = Math.round(Math.abs(min)); return `${Math.floor(m / 60)}h ${m % 60}m`; };
+  const dateFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' });
+  const wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' });
+
+  function localNow() {
+    const now = Date.now(), off = tzOffsetMin(now, loc.tz);
+    const l = new Date(now + off * 6e4);
+    const minute = l.getUTCHours() * 60 + l.getUTCMinutes() + l.getUTCSeconds() / 60;
+    const doy = l.getUTCFullYear() === YEAR
+      ? Math.round((Date.UTC(YEAR, l.getUTCMonth(), l.getUTCDate()) - Date.UTC(YEAR, 0, 1)) / 864e5) : 0;
+    return { minute, doy };
+  }
+
+  // ---------- state ----------
+  let dayFloat = localNow().doy, nowMin = localNow().minute, todayLen = 0, yearLens = [];
+  const slider = $('day');
+  slider.max = N - 1; slider.value = dayFloat;
+
+  function computeYear() {
+    midCache = {};
+    yearLens = [];
+    for (let d = 0; d < N; d++) yearLens.push(riseSet(samples(d)).len);
+    todayLen = yearLens[localNow().doy];
+  }
+
+  // ---------- clock drawing ----------
+  const cv = $('clock'), ctx = cv.getContext('2d');
+  const sp = $('spark'), sx = sp.getContext('2d');
+  let S = 0, SW = 0, SH = 0, dpr = 1;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    S = cv.clientWidth; cv.width = S * dpr; cv.height = S * dpr;
+    SW = sp.clientWidth; SH = sp.clientHeight; sp.width = SW * dpr; sp.height = SH * dpr;
+    render();
+  }
+
+  const ang = m => m / 1440 * Math.PI * 2 + Math.PI / 2;
+
+  function drawClock(D) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, S, S);
+    const cx = S / 2, cy = S / 2, Ro = S * 0.335, Rm = S * 0.228, Ri = S * 0.116;
+    const P = (r, m) => [cx + Math.cos(ang(m)) * r, cy + Math.sin(ang(m)) * r];
+
+    // ticks & labels
+    ctx.lineCap = 'round';
+    for (let h = 0; h < 24; h++) {
+      const major = h % 3 === 0, r0 = Ro + S * 0.03, r1 = r0 + (major ? S * 0.028 : S * 0.014);
+      const [x0, y0] = P(r0, h * 60), [x1, y1] = P(r1, h * 60);
+      ctx.strokeStyle = major ? 'rgba(243,234,215,.8)' : 'rgba(243,234,215,.35)';
+      ctx.lineWidth = major ? 2 : 1.2;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      if (major) {
+        const [lx, ly] = P(Ro + S * 0.088, h * 60);
+        ctx.fillStyle = '#d9dbe4';
+        ctx.font = `600 ${Math.max(10, S * 0.036)}px system-ui,sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${(h % 12) || 12}${h < 12 ? 'AM' : 'PM'}`, lx, ly);
+      }
+    }
+
+    const ring = (s, e, r0, r1, c) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r1, ang(s) - 0.002, ang(e) + 0.002);
+      ctx.arc(cx, cy, r0, ang(e) + 0.002, ang(s) - 0.002, true);
+      ctx.closePath(); ctx.fillStyle = c; ctx.fill();
+    };
+    for (const [s, e, b] of D.outer) ring(s, e, Rm, Ro, BANDS[b][2]);
+    for (const [s, e, b] of D.mid) ring(s, e, Ri, Rm, MID_C[b]);
+
+    // inner disc: day wedge
+    ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill();
+    ctx.fillStyle = '#84c9ea';
+    if (D.rise !== null && D.set !== null) {
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, Ri, ang(D.rise), ang(D.set)); ctx.closePath(); ctx.fill();
+    } else if (D.len >= 1440) { ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, Math.PI * 2); ctx.fill(); }
+
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, Rm, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, Math.PI * 2); ctx.stroke();
+
+    // sunrise / sunset spokes + markers
+    const spoke = m => {
+      const [x0, y0] = P(Ri, m), [x1, y1] = P(Ro, m);
+      ctx.strokeStyle = '#0008'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    };
+    const marker = (m, up) => {
+      const [x, y] = P(Ro, m), r = Math.max(11, S * 0.032), k = r * 0.42;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#d9a542'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#2a1d05'; ctx.stroke();
+      ctx.fillStyle = '#2a1d05'; ctx.beginPath();
+      const s = up ? 1 : -1;
+      ctx.moveTo(x, y - s * k * 1.15); ctx.lineTo(x - k * 1.1, y + s * k * 0.25); ctx.lineTo(x + k * 1.1, y + s * k * 0.25);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(x - k * 1.1, up ? y + k * 0.55 : y - k * 0.55 - k * 0.45, k * 2.2, k * 0.45);
+    };
+    if (D.rise !== null) spoke(D.rise);
+    if (D.set !== null) spoke(D.set);
+
+    // current-time hand
+    const [hx0, hy0] = P(Ri * 0.55, nowMin), [hx1, hy1] = P(Ro, nowMin);
+    ctx.strokeStyle = '#000a'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(hx0, hy0); ctx.lineTo(hx1, hy1); ctx.stroke();
+    ctx.strokeStyle = '#e9c46a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(hx0, hy0); ctx.lineTo(hx1, hy1); ctx.stroke();
+
+    const [mx, my] = P(Ro * 0.84, nowMin), mr = Math.max(9, S * 0.026);
+    ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2);
+    ctx.fillStyle = '#e9c46a'; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(mx, my, mr + 2.5, 0, Math.PI * 2); ctx.stroke();
+
+    // sun glyph
+    const [sxp, syp] = P(Ro + S * 0.005, nowMin), sr = Math.max(7, S * 0.022);
+    ctx.save(); ctx.translate(sxp, syp);
+    ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * sr * 1.45, Math.sin(a) * sr * 1.45);
+      ctx.lineTo(Math.cos(a) * sr * 2, Math.sin(a) * sr * 2); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.fillStyle = '#ffd24d';
+    ctx.shadowColor = '#ffd24d'; ctx.shadowBlur = 10; ctx.fill(); ctx.restore();
+
+    if (D.rise !== null) marker(D.rise, true);
+    if (D.set !== null) marker(D.set, false);
+  }
+
+  // ---------- slider sparkline ----------
+  const THUMB = 26, INSET = THUMB / 2;
+  const xOf = d => INSET + d / (N - 1) * (SW - 2 * INSET);
+  function drawSpark() {
+    if (!SW) return;
+    sx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sx.clearRect(0, 0, SW, SH);
+    // track base
+    sx.fillStyle = '#0e1a33';
+    sx.beginPath(); sx.roundRect(0, 0, SW, SH, 14); sx.fill();
+    const lo = Math.min(...yearLens), hi = Math.max(...yearLens), span = Math.max(1, hi - lo);
+    const yOf = v => SH - 7 - (v - lo) / span * (SH - 16);
+    // month boundaries
+    sx.strokeStyle = 'rgba(255,255,255,.07)'; sx.lineWidth = 1;
+    for (let m = 1; m < 12; m++) {
+      const d = (Date.UTC(YEAR, m, 1) - Date.UTC(YEAR, 0, 1)) / 864e5, x = Math.round(xOf(d)) + .5;
+      sx.beginPath(); sx.moveTo(x, 4); sx.lineTo(x, SH - 4); sx.stroke();
+    }
+    // area
+    const grad = sx.createLinearGradient(0, 0, 0, SH);
+    grad.addColorStop(0, 'rgba(233,196,106,.45)'); grad.addColorStop(1, 'rgba(233,196,106,0)');
+    sx.beginPath(); sx.moveTo(xOf(0), SH);
+    yearLens.forEach((v, d) => sx.lineTo(xOf(d), yOf(v)));
+    sx.lineTo(xOf(N - 1), SH); sx.closePath(); sx.fillStyle = grad; sx.fill();
+    sx.beginPath(); yearLens.forEach((v, d) => d ? sx.lineTo(xOf(d), yOf(v)) : sx.moveTo(xOf(d), yOf(v)));
+    sx.strokeStyle = 'rgba(233,196,106,.85)'; sx.lineWidth = 1.5; sx.stroke();
+    // today tick
+    const td = localNow().doy, tx = xOf(td);
+    sx.fillStyle = '#fff'; sx.beginPath(); sx.arc(tx, yOf(yearLens[td]), 2.5, 0, Math.PI * 2); sx.fill();
+    // selected line
+    const x = xOf(dayFloat);
+    sx.strokeStyle = 'rgba(255,248,230,.55)'; sx.lineWidth = 1;
+    sx.beginPath(); sx.moveTo(x, 3); sx.lineTo(x, SH - 3); sx.stroke();
+  }
+
+  function buildMonths() {
+    const el = $('months'); el.innerHTML = '';
+    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    names.forEach((n, m) => {
+      const s = (Date.UTC(YEAR, m, 1) - Date.UTC(YEAR, 0, 1)) / 864e5;
+      const e = (Date.UTC(YEAR, m + 1, 1) - Date.UTC(YEAR, 0, 1)) / 864e5;
+      const p = ((s + e) / 2) / (N - 1);
+      const span = document.createElement('span');
+      span.textContent = n; span.dataset.s = n[0];
+      span.style.left = `calc(${INSET}px + ${p} * (100% - ${THUMB}px))`;
+      el.appendChild(span);
+    });
+    $('legend').innerHTML = BANDS.map(b => `<span><i style="background:${b[2]}"></i>${b[0]}</span>`).join('');
+  }
+
+  // ---------- render ----------
+  function render() {
+    if (!S) return;
+    const D = dayData(dayFloat);
+    drawClock(D);
+    drawSpark();
+
+    const ph = phaseAt(D.outer, nowMin), band = BANDS[ph.b];
+    $('phDot').style.background = band[2];
+    $('phName').textContent = band[0];
+    $('phWin').textContent = ph.whole ? 'All day' : `${fmtT(ph.s)} → ${fmtT(ph.e)} (${fmtD(ph.e - ph.s)})`;
+    $('phDesc').textContent = band[1];
+    $('nowT').textContent = fmtT(nowMin);
+    $('sRise').textContent = D.rise !== null ? fmtT(D.rise) : '—';
+    $('sSet').textContent = D.set !== null ? fmtT(D.set) : '—';
+    $('sLen').textContent = fmtD(D.len);
+    const delta = D.len - todayLen;
+    $('sDelta').textContent = Math.abs(delta) < 0.5 ? '—' : `${delta > 0 ? '+' : '−'}${fmtD(delta)}`;
+
+    const d0 = Math.min(Math.floor(dayFloat), N - 1);
+    const dt = new Date(Date.UTC(YEAR, 0, 1 + d0));
+    $('dateLabel').textContent = dateFmt.format(dt);
+    $('dateSub').textContent = `${wdFmt.format(dt)} · Day ${d0 + 1} of ${N}, ${YEAR}${d0 === localNow().doy ? ' · today' : ''}`;
+  }
+  let queued = false;
+  const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } };
+
+  // ---------- playback ----------
+  const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor"/></svg>';
+  const YEAR_SECONDS = 14;
+  let playing = false, lastT = 0;
+  function setPlaying(p) {
+    playing = p;
+    $('play').innerHTML = p ? ICON_PAUSE : ICON_PLAY;
+    $('play').setAttribute('aria-label', p ? 'Pause' : 'Play through the year');
+    if (p) { lastT = performance.now(); requestAnimationFrame(tick); }
+  }
+  function tick(t) {
+    if (!playing) return;
+    const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
+    dayFloat += dt * N / YEAR_SECONDS;
+    if (dayFloat > N - 1) dayFloat -= N - 1;
+    slider.value = dayFloat;
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- events ----------
+  slider.addEventListener('input', () => { if (playing) setPlaying(false); dayFloat = +slider.value; schedule(); });
+  slider.addEventListener('change', () => { dayFloat = Math.round(+slider.value); slider.value = dayFloat; schedule(); });
+  $('play').addEventListener('click', () => setPlaying(!playing));
+  $('todayBtn').addEventListener('click', () => {
+    setPlaying(false); dayFloat = localNow().doy; slider.value = dayFloat; schedule();
+  });
+  $('locBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) return;
+    $('locBtn').textContent = '📍 Locating…';
+    navigator.geolocation.getCurrentPosition(pos => {
+      loc = { name: 'My location (GPS)', lat: pos.coords.latitude, lon: pos.coords.longitude,
+              tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+      $('locBtn').textContent = `📍 ${loc.name}`;
+      computeYear(); nowMin = localNow().minute; render();
+    }, () => { $('locBtn').textContent = `📍 ${loc.name}`; }, { timeout: 10000 });
+  });
+  window.addEventListener('resize', resize);
+  setInterval(() => { nowMin = localNow().minute; if (!playing) schedule(); }, 20000);
+
+  // ---------- init ----------
+  computeYear();
+  buildMonths();
+  setPlaying(false);
+  resize();
+})();
+</script>
+</body>
+</html>
